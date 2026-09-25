@@ -47,6 +47,6 @@ jobs:
           pip install -r scratch/ha-core/requirements_test.txt
           # Élise imports HA's Conversation integration. Install exactly its
           # pinned runtime requirements instead of requirements_all.txt.
-          pip install gazetteer-matcher==1.1.0 hassil==3.12.1 home-assistant-intents==2026.8.28 mutagen==1.48.1
+          pip install pymicro-vad==1.0.1 pyspeex-noise==1.0.2 gazetteer-matcher==1.1.0 hassil==3.12.1 home-assistant-intents==2026.8.28 SQLAlchemy==2.0.52 fnv-hash-fast==2.0.3 psutil-home-assistant==0.0.1 mutagen==1.48.1 ha-ffmpeg==3.2.2
       - name: Run unit tests
         run: pytest -q
