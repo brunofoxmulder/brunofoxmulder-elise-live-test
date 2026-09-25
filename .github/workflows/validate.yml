@@ -45,5 +45,8 @@ jobs:
           # stall the runner even though Élise tests only need their own deps.
           pip install -e scratch/ha-core
           pip install -r scratch/ha-core/requirements_test.txt
+          # Élise imports HA's Conversation integration. Install exactly its
+          # pinned runtime requirements instead of requirements_all.txt.
+          pip install gazetteer-matcher==1.1.0 hassil==3.12.1 home-assistant-intents==2026.8.28
       - name: Run unit tests
         run: pytest -q
