@@ -42,5 +42,6 @@ jobs:
           git clone --depth 1 --branch 2026.9.3 https://github.com/home-assistant/core.git scratch/ha-core
           pip install -e scratch/ha-core
           pip install -r scratch/ha-core/requirements_test.txt
+          pip install -r scratch/ha-core/requirements_all.txt
       - name: Run unit tests
         run: pytest -q
