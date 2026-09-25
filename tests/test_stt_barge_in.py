@@ -456,7 +456,7 @@ async def test_audio_tool_context_preserves_pipeline_provenance(
         captured_contexts.append(kwargs["llm_context"].context)
         return SimpleNamespace(tools=[], api_prompt="", custom_serializer=None)
 
-    monkeypatch.setattr("elise_live_test.stt.llm.async_get_api", fake_async_get_api)
+    monkeypatch.setattr("elise_live_test.tools.llm.async_get_api", fake_async_get_api)
 
     mic = MicStream()
     result_future = asyncio.Future()
