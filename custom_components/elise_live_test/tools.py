@@ -42,7 +42,17 @@ async def async_load_tools(
     api_ids = selected_api_ids(config)
     if not api_ids:
         return None
-    instance = await llm.async_get_api(hass, api_ids, llm_context)
+    # Preserve Matt's single-Assist call shape when only Assist is selected.
+    # Besides remaining compatible with Core and its pipeline-context tests,
+    # this avoids needlessly invoking the multi-API merger for the default path.
+    api_selector: str | list[str] = (
+        api_ids[0] if len(api_ids) == 1 else api_ids
+    )
+    instance = await llm.async_get_api(
+        hass=hass,
+        llm_hass_api=api_selector,
+        llm_context=llm_context,
+    )
     seen: set[str] = set()
     for tool in instance.tools:
         if tool.name in seen or tool.name in _RESERVED_TOOLS:
