@@ -673,3 +673,18 @@ async def test_placeholder_transcript_carries_unique_turn_id(
     assert turn is not None
     assert turn.assistant_text.startswith(GEMINI_LIVE_TTS_PLACEHOLDER)
     assert turn.assistant_text != GEMINI_LIVE_TTS_PLACEHOLDER
+
+
+def test_exposed_search_and_native_grounding_are_independent():
+    """An exposed SearXNG tool remains encouraged independently of Google grounding."""
+    tools = [SimpleNamespace(name="searxng_search")]
+
+    exposed_only = _add_search_tool_instruction(
+        "base", tools, True, native_search_grounding=False
+    )
+    native_only = _add_search_tool_instruction(
+        "base", [], True, native_search_grounding=True
+    )
+
+    assert exposed_only.startswith("base\n\nYou MUST use")
+    assert native_only.startswith("base\n\nYou MUST use")
