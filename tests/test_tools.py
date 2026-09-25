@@ -12,14 +12,14 @@ def test_selected_api_ids_defaults_to_assist():
 
 
 def test_selected_api_ids_preserves_multiple_and_deduplicates():
-    assert selected_api_ids({"api_id": ["assist", "memory", "assist"]}) == [
+    assert selected_api_ids({"llm_hass_api": ["assist", "memory", "assist"]}) == [
         "assist",
         "memory",
     ]
 
 
 def test_selected_api_ids_empty_is_intentional():
-    assert selected_api_ids({"api_id": []}) == []
+    assert selected_api_ids({"llm_hass_api": []}) == []
 
 
 @pytest.mark.asyncio
@@ -35,7 +35,7 @@ async def test_async_load_tools_requests_all_selected_apis(monkeypatch):
     monkeypatch.setattr("elise_live_test.tools.llm.async_get_api", fake_get_api)
     result = await async_load_tools(
         object(),
-        {"api_id": ["assist", "agent_memory"]},
+        {"llm_hass_api": ["assist", "agent_memory"]},
         object(),
     )
 
@@ -61,6 +61,6 @@ async def test_async_load_tools_rejects_reserved_tool_name(monkeypatch):
     with pytest.raises(Exception, match="Conflicting tool name"):
         await async_load_tools(
             object(),
-            {"api_id": ["assist"]},
+            {"llm_hass_api": ["assist"]},
             object(),
         )
