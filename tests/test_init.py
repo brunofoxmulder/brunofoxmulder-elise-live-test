@@ -3,8 +3,8 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-from custom_components.gemini_live import async_setup_entry
-from custom_components.gemini_live.const import CONF_SUPPORT_BARGE_IN, DOMAIN
+from custom_components.elise_live_test import async_setup_entry
+from custom_components.elise_live_test.const import CONF_SUPPORT_BARGE_IN, DOMAIN
 
 
 async def test_setup_succeeds_with_barge_in_without_core_interrupt_support() -> None:

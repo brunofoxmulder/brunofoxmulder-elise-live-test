@@ -6,8 +6,8 @@ from collections import deque
 from types import SimpleNamespace
 
 from aiohttp import WSMsgType
-from gemini_live.live import LiveConfig, LiveEvent
-from gemini_live.openai import OpenAIRealtimeError, OpenAIRealtimeSession
+from elise_live_test.live import LiveConfig, LiveEvent
+from elise_live_test.openai import OpenAIRealtimeError, OpenAIRealtimeSession
 
 
 def _make_config(**overrides) -> LiveConfig:

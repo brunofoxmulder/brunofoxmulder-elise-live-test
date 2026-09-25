@@ -3,13 +3,13 @@
 import sys
 from types import SimpleNamespace
 
-from gemini_live.gemini import (
+from elise_live_test.gemini import (
     GeminiLiveClient,
     GeminiLiveSession,
     _gemini_config,
     async_create_gemini_client,
 )
-from gemini_live.live import LiveConfig, LiveEvent, LiveTool
+from elise_live_test.live import LiveConfig, LiveEvent, LiveTool
 
 
 def _make_config(**overrides) -> LiveConfig:

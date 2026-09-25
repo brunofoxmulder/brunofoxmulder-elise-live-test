@@ -12,7 +12,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from gemini_live.const import (
+from elise_live_test.const import (
     CONF_SUPPORT_BARGE_IN,
     CONF_TRANSCRIBE_GEMINI,
     CONF_TRANSCRIBE_GPT,
@@ -21,14 +21,14 @@ from gemini_live.const import (
     GEMINI_SESSION_MANAGER_KEY,
     GEMINI_TURN_STORE_KEY,
 )
-from gemini_live.live import LiveConfig, LiveEvent
-from gemini_live.runtime import LiveSessionManager, TurnStore
-from gemini_live.stt import (
+from elise_live_test.live import LiveConfig, LiveEvent
+from elise_live_test.runtime import LiveSessionManager, TurnStore
+from elise_live_test.stt import (
     GeminiLiveSTT,
     GPTRealtimeSTT,
     _add_search_tool_instruction,
 )
-from gemini_live.utils import PCM24kTo16kStreamResampler, resample_24k_to_16k
+from elise_live_test.utils import PCM24kTo16kStreamResampler, resample_24k_to_16k
 from homeassistant.components.stt import (
     AudioBitRates,
     AudioChannels,
@@ -54,7 +54,7 @@ ENTITY_CLASSES = [GeminiLiveSTT, GPTRealtimeSTT]
 def _core_supports_interruption(monkeypatch: pytest.MonkeyPatch):
     """Pretend Core provides the complete TTS interruption path."""
     monkeypatch.setattr(
-        "gemini_live.stt.supports_tts_interruption", lambda: True
+        "elise_live_test.stt.supports_tts_interruption", lambda: True
     )
 
 
@@ -456,7 +456,7 @@ async def test_audio_tool_context_preserves_pipeline_provenance(
         captured_contexts.append(kwargs["llm_context"].context)
         return SimpleNamespace(tools=[], api_prompt="", custom_serializer=None)
 
-    monkeypatch.setattr("gemini_live.stt.llm.async_get_api", fake_async_get_api)
+    monkeypatch.setattr("elise_live_test.stt.llm.async_get_api", fake_async_get_api)
 
     mic = MicStream()
     result_future = asyncio.Future()
@@ -501,7 +501,7 @@ async def test_audio_entry_point_forwards_resolved_pipeline_context(
     captured_contexts = []
 
     monkeypatch.setattr(
-        "gemini_live.stt.active_pipeline_context",
+        "elise_live_test.stt.active_pipeline_context",
         lambda *_args, **_kwargs: (
             "conversation-1",
             "device-1",
@@ -559,7 +559,7 @@ async def test_barge_in_drops_provider_transcript_when_transcription_disabled(
     # The full entry point resolves the pipeline conversation ID through Home
     # Assistant; pin it so the published turn can be looked up below.
     monkeypatch.setattr(
-        "gemini_live.stt.active_pipeline_context",
+        "elise_live_test.stt.active_pipeline_context",
         lambda *_args, **_kwargs: ("conversation-1", None, None),
     )
 

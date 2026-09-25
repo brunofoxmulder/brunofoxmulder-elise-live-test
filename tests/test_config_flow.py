@@ -3,12 +3,12 @@
 from typing import Any
 
 import voluptuous as vol
-from gemini_live.config_flow import (
+from elise_live_test.config_flow import (
     _needs_model_specific_refresh,
     _provider_schema,
     _strip_unsupported_settings,
 )
-from gemini_live.const import (
+from elise_live_test.const import (
     CONF_AFFECTIVE_DIALOG,
     CONF_API_KEY,
     CONF_MODEL,
@@ -123,7 +123,7 @@ def test_unsupported_model_settings_are_removed() -> None:
 
 def test_schema_shows_barge_in_for_both_providers(monkeypatch) -> None:
     monkeypatch.setattr(
-        "gemini_live.config_flow.supports_tts_interruption", lambda: True
+        "elise_live_test.config_flow.supports_tts_interruption", lambda: True
     )
     for provider in (PROVIDER_GEMINI, PROVIDER_OPENAI):
         schema = _provider_schema(provider)
@@ -136,7 +136,7 @@ def test_barge_in_hidden_when_core_lacks_interruption_support(
 ) -> None:
     """Hide the barge-in option entirely when Core cannot interrupt TTS."""
     monkeypatch.setattr(
-        "gemini_live.config_flow.supports_tts_interruption", lambda: False
+        "elise_live_test.config_flow.supports_tts_interruption", lambda: False
     )
 
     for provider in (PROVIDER_GEMINI, PROVIDER_OPENAI):
@@ -158,7 +158,7 @@ def test_barge_in_setting_stripped_without_core_interruption_support(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
-        "gemini_live.config_flow.supports_tts_interruption", lambda: False
+        "elise_live_test.config_flow.supports_tts_interruption", lambda: False
     )
 
     result = _strip_unsupported_settings(
@@ -173,7 +173,7 @@ def test_barge_in_setting_stripped_without_core_interruption_support(
 
 def test_barge_in_defaults_to_false(monkeypatch) -> None:
     monkeypatch.setattr(
-        "gemini_live.config_flow.supports_tts_interruption", lambda: True
+        "elise_live_test.config_flow.supports_tts_interruption", lambda: True
     )
     for provider in (PROVIDER_GEMINI, PROVIDER_OPENAI):
         schema = _provider_schema(provider)
@@ -192,7 +192,7 @@ def test_barge_in_defaults_to_false(monkeypatch) -> None:
 
 def test_barge_in_setting_persists_through_reconfigure(monkeypatch) -> None:
     monkeypatch.setattr(
-        "gemini_live.config_flow.supports_tts_interruption", lambda: True
+        "elise_live_test.config_flow.supports_tts_interruption", lambda: True
     )
     for provider in (PROVIDER_GEMINI, PROVIDER_OPENAI):
         schema = _provider_schema(provider, {CONF_SUPPORT_BARGE_IN: True})

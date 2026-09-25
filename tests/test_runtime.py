@@ -4,8 +4,8 @@ import asyncio
 import contextlib
 from types import SimpleNamespace
 
-from gemini_live.live import LiveConfig
-from gemini_live.runtime import (
+from elise_live_test.live import LiveConfig
+from elise_live_test.runtime import (
     AudioStream,
     LiveSessionManager,
     active_pipeline_context,
@@ -141,7 +141,7 @@ def test_active_pipeline_context_ignores_finished_and_error_runs(monkeypatch):
         final_event=PipelineEventType.ERROR,
     )
     monkeypatch.setattr(
-        "gemini_live.runtime.new_conversation_id",
+        "elise_live_test.runtime.new_conversation_id",
         lambda: "temporary-conversation",
     )
 

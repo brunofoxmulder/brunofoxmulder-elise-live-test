@@ -1,6 +1,6 @@
 """Tests for the provider-neutral live contract."""
 
-from gemini_live.live import LiveConfig, LiveEvent
+from elise_live_test.live import LiveConfig, LiveEvent
 
 
 def test_live_config_defaults_preserve_legacy_behaviour():
