@@ -1,0 +1,20 @@
+{
+  "domain": "elise_live_test",
+  "name": "Élise Live Test",
+  "after_dependencies": [
+    "assist_pipeline"
+  ],
+  "codeowners": [
+    "@brunofoxmulder"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/brunofoxmulder/brunofoxmulder-elise-live-test",
+  "integration_type": "service",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/brunofoxmulder/brunofoxmulder-elise-live-test/issues",
+  "requirements": [
+    "google-genai==2.21.0",
+    "msgpack==1.1.2"
+  ],
+  "version": "0.1.0-test.1"
+}

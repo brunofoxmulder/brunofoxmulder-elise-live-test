@@ -1,6 +1,6 @@
 """Constants for the Gemini Live integration."""
 
-DOMAIN = "gemini_live"
+DOMAIN = "elise_live_test"
 
 CONF_API_KEY = "api_key"
 CONF_PROVIDER = "provider"
@@ -30,7 +30,7 @@ DEFAULT_AFFECTIVE_DIALOG = False
 PROVIDER_GEMINI = "gemini"
 PROVIDER_OPENAI = "openai"
 PROVIDER_PERSONAPLEX = "personaplex"
-GEMINI_LIVE_TTS_PLACEHOLDER = "-- gemini live --"
+GEMINI_LIVE_TTS_PLACEHOLDER = "-- elise live test --"
 DEFAULT_SYSTEM_INSTRUCTION = (
     "You are a helpful, concise voice assistant for the user's smart home, powered by Home Assistant. "
     "Use the available tools to control devices, check states, run scripts, and query sensors. "
