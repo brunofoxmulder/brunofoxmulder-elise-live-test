@@ -9,6 +9,7 @@ from uuid import uuid4
 from homeassistant.components import conversation
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import chat_session, llm
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -59,6 +60,7 @@ from .stt import (
     _add_show_text_tool,
 )
 from .openai import OpenAIRealtimeClient
+from .tools import async_load_tools
 from .runtime import AudioStream, new_conversation_id
 from .utils import pcm_to_wav, resample_24k_to_16k
 
@@ -184,11 +186,13 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
         system_instruction = custom_instruction or self.default_system_instruction
 
         try:
-            llm_api = await llm.async_get_api(
-                hass=self.hass,
-                api_id=llm.LLM_API_ASSIST,
-                llm_context=llm_context,
+            llm_api = await async_load_tools(
+                self.hass,
+                config,
+                llm_context,
             )
+            if llm_api is None:
+                raise HomeAssistantError("No Home Assistant LLM APIs selected")
             api_prompt = llm_api.api_prompt
             if custom_instruction:
                 system_instruction = f"{custom_instruction}\n\n{api_prompt}"

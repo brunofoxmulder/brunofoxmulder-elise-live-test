@@ -24,6 +24,7 @@ from homeassistant.components.stt import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Context, HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import chat_session, llm
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -70,6 +71,7 @@ from .const import (
     SUPPORTED_LANGUAGES,
 )
 from .openai import OpenAIRealtimeClient
+from .tools import async_load_tools
 from .runtime import (
     AudioStream,
     PipelineTurn,
@@ -526,10 +528,10 @@ class LiveModelSTT(SpeechToTextEntity):
         system_instruction = custom_instruction or self.default_system_instruction
 
         try:
-            llm_api = await llm.async_get_api(
-                hass=self.hass,
-                api_id=llm.LLM_API_ASSIST,
-                llm_context=llm.LLMContext(
+            llm_api = await async_load_tools(
+                self.hass,
+                config,
+                llm.LLMContext(
                     platform=self.integration_domain,
                     context=(
                         pipeline_context
@@ -541,6 +543,8 @@ class LiveModelSTT(SpeechToTextEntity):
                     device_id=device_id,
                 ),
             )
+            if llm_api is None:
+                raise HomeAssistantError("No Home Assistant LLM APIs selected")
             ha_tools = llm_api.tools
 
             api_prompt = llm_api.api_prompt

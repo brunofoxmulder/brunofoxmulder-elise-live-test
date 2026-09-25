@@ -4,10 +4,12 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.const import CONF_LLM_HASS_API
 from homeassistant.core import callback
-from homeassistant.helpers import selector
+from homeassistant.helpers import llm, selector
 
 from .compat import supports_tts_interruption
+from .tools import selected_api_ids
 from .const import (
     AVAILABLE_MODELS,
     AVAILABLE_VOICES_INFO,
@@ -112,9 +114,13 @@ def _provider(config: dict[str, Any]) -> str:
     return config.get(CONF_PROVIDER, PROVIDER_GEMINI)
 
 
-def _provider_schema(provider: str, config: dict[str, Any] | None = None) -> vol.Schema:
+def _provider_schema(hass, provider: str, config: dict[str, Any] | None = None) -> vol.Schema:
     """Build a provider-specific setup/options schema."""
     current = config or {}
+    selected = selected_api_ids(current)
+    available = {api.id: api.name for api in llm.async_get_apis(hass)}
+    for api_id in selected:
+        available.setdefault(api_id, f"{api_id} (unavailable)")
     is_openai = provider == PROVIDER_OPENAI
     is_personaplex = provider == PROVIDER_PERSONAPLEX
     models = (PERSONAPLEX_AVAILABLE_MODELS if is_personaplex else
@@ -136,6 +142,15 @@ def _provider_schema(provider: str, config: dict[str, Any] | None = None) -> vol
         else vol.Required(CONF_API_KEY)
     )
     fields: dict[vol.Marker, Any] = {
+        vol.Optional(CONF_LLM_HASS_API, default=selected): selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[
+                    selector.SelectOptionDict(value=api_id, label=name)
+                    for api_id, name in available.items()
+                ],
+                multiple=True,
+            )
+        ),
         api_key_field: str,
         vol.Required(
             CONF_MODEL,
@@ -296,6 +311,7 @@ class GeminiLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             user_input = _strip_unsupported_settings(user_input)
             user_input[CONF_PROVIDER] = selected_provider
             user_input.setdefault(CONF_SYSTEM_INSTRUCTION, "")
+            user_input.setdefault(CONF_LLM_HASS_API, [])
             title = {
                 PROVIDER_OPENAI: "GPT Realtime",
                 PROVIDER_PERSONAPLEX: "PersonaPlex",
@@ -303,7 +319,7 @@ class GeminiLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_create_entry(title=title, data=user_input)
         return self.async_show_form(
             step_id="provider",
-            data_schema=_provider_schema(selected_provider),
+            data_schema=_provider_schema(self.hass, selected_provider),
             description_placeholders={
                 "provider": {
                     PROVIDER_OPENAI: "OpenAI",
@@ -326,6 +342,7 @@ class GeminiLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             user_input = _strip_unsupported_settings(user_input)
             user_input[CONF_PROVIDER] = provider
             user_input.setdefault(CONF_SYSTEM_INSTRUCTION, "")
+            user_input.setdefault(CONF_LLM_HASS_API, [])
             return self.async_update_reload_and_abort(
                 entry,
                 data_updates=user_input,
@@ -333,7 +350,7 @@ class GeminiLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=_provider_schema(provider, config),
+            data_schema=_provider_schema(self.hass, provider, config),
         )
 
     @staticmethod
@@ -361,8 +378,9 @@ class GeminiLiveOptionsFlowHandler(config_entries.OptionsFlow):
             user_input = _strip_unsupported_settings(user_input)
             user_input[CONF_PROVIDER] = provider
             user_input.setdefault(CONF_SYSTEM_INSTRUCTION, "")
+            user_input.setdefault(CONF_LLM_HASS_API, [])
             return self.async_create_entry(title="", data=user_input)
         return self.async_show_form(
             step_id="init",
-            data_schema=_provider_schema(provider, config),
+            data_schema=_provider_schema(self.hass, provider, config),
         )
