@@ -447,6 +447,10 @@ async def test_audio_tool_context_preserves_pipeline_provenance(
         {"api_key": "k"},
         entity_class,
     )
+    # Force Assist selection explicitly in this isolated provenance test.
+    # FakeHass has no real Core LLM registry; async_load_tools is patched below,
+    # so this test remains focused on forwarding the pipeline Context.
+    entity.entry.data["llm_hass_api"] = ["assist"]
     session = ScriptedSession(support_barge_in=False)
     _bind_client(entity, ScriptedClient(session))
     source_context = Context(user_id="voice-user", parent_id="parent-context")
