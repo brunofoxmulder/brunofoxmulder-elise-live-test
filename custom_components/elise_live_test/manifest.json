@@ -2,7 +2,8 @@
   "domain": "elise_live_test",
   "name": "Élise Live Test",
   "after_dependencies": [
-    "assist_pipeline"
+    "assist_pipeline",
+    "recorder"
   ],
   "codeowners": [
     "@brunofoxmulder"
