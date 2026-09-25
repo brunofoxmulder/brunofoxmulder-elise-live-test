@@ -49,7 +49,7 @@ async def test_async_load_tools_empty_selection_does_not_fallback(monkeypatch):
         raise AssertionError("async_get_api must not be called")
 
     monkeypatch.setattr("elise_live_test.tools.llm.async_get_api", forbidden)
-    assert await async_load_tools(object(), {"api_id": []}, object()) is None
+    assert await async_load_tools(object(), {"llm_hass_api": []}, object()) is None
 
 
 @pytest.mark.asyncio
