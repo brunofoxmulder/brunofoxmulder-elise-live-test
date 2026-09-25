@@ -36,6 +36,7 @@ _compute = _MODULE._compute
 _window = _MODULE._window
 add_history_tool = _MODULE.add_history_tool
 HISTORY_TOOL_NAME = _MODULE.HISTORY_TOOL_NAME
+_statistics_change = _MODULE._statistics_change
 
 
 BASE = datetime(2026, 9, 20, 10, 0, tzinfo=UTC)
@@ -218,3 +219,56 @@ def test_empty_history_is_safe():
         BASE + timedelta(hours=1),
     )
     assert result == {"states": [], "truncated": False}
+
+
+def test_statistics_change_sums_energy_buckets_and_preserves_unit(monkeypatch):
+    """Cumulative-energy history must use HA long-term Statistics change."""
+    start = datetime(2026, 9, 24, 0, 0, tzinfo=UTC)
+    end = start + timedelta(days=1)
+    entity_id = "sensor.house_energy"
+
+    captured = {}
+
+    def fake_statistics_during_period(
+        hass, query_start, query_end, statistic_ids, period, units, types
+    ):
+        captured.update(
+            start=query_start,
+            end=query_end,
+            statistic_ids=statistic_ids,
+            period=period,
+            types=types,
+        )
+        return {
+            entity_id: [
+                {"start": start, "change": 1.25},
+                {"start": start + timedelta(hours=12), "change": 2.75},
+            ]
+        }
+
+    monkeypatch.setattr(
+        _MODULE.recorder_statistics,
+        "statistics_during_period",
+        fake_statistics_during_period,
+    )
+    hass = SimpleNamespace(
+        states=SimpleNamespace(
+            get=lambda requested: SimpleNamespace(
+                attributes={"unit_of_measurement": "kWh"}
+            )
+            if requested == entity_id
+            else None
+        )
+    )
+
+    result = _statistics_change(hass, entity_id, start, end)
+
+    assert result["statistics_source"] == "home_assistant_long_term_statistics"
+    assert result["period"] == "day"
+    assert result["change"] == 4.0
+    assert result["unit"] == "kWh"
+    assert captured["start"] == start
+    assert captured["end"] == end - timedelta(microseconds=1)
+    assert captured["statistic_ids"] == {entity_id}
+    assert captured["period"] == "day"
+    assert captured["types"] == {"change"}
