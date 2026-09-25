@@ -1,10 +1,10 @@
-# Gemini Live and GPT Realtime for Home Assistant
+# Élise Live Test for Home Assistant
 
-[![HACS validation](https://img.shields.io/github/actions/workflow/status/matt123p/ha-gemini-live/validate.yml?branch=main&label=HACS%20validation)](https://github.com/matt123p/ha-gemini-live/actions/workflows/validate.yml)
-[![GitHub release](https://img.shields.io/github/v/release/matt123p/ha-gemini-live)](https://github.com/matt123p/ha-gemini-live/releases)
-[![License](https://img.shields.io/github/license/matt123p/ha-gemini-live)](LICENSE)
+[![HACS validation](https://img.shields.io/github/actions/workflow/status/brunofoxmulder/brunofoxmulder-elise-live-test/validate.yml?branch=main&label=HACS%20validation)](https://github.com/brunofoxmulder/brunofoxmulder-elise-live-test/actions/workflows/validate.yml)
+[![GitHub release](https://img.shields.io/github/v/release/brunofoxmulder/brunofoxmulder-elise-live-test)](https://github.com/brunofoxmulder/brunofoxmulder-elise-live-test/releases)
+[![License](https://img.shields.io/github/license/brunofoxmulder/brunofoxmulder-elise-live-test)](LICENSE)
 
-This custom Home Assistant integration connects the Home Assistant voice pipeline
+Élise Live Test is an experimental integration based on Gemini Live v1.0.9. It connects the Home Assistant voice pipeline
 directly to either Google's Gemini Live API or OpenAI's Realtime API.
 
 Doing this has the advantage of reducing the time it takes to reply because the 
@@ -14,6 +14,8 @@ It streams microphone audio to the selected provider, lets the model call Home
 Assistant's exposed Assist tools, and plays the native spoken response back through
 the pipeline. This bypasses separate Speech-To-Text (STT) and Text-to-Speech (TTS)
 cloud calls.
+
+**Test repository:** this repository is intentionally separate from the production Élise Live integration. Do not use it as a production replacement until the test branch is validated on Home Assistant.
 
 **NOTE:** The model transcribes the user's speech, but response transcription is
 optional. Enabling it can delay the start of playback in Home Assistant.
@@ -131,7 +133,7 @@ Add this repository as a custom repository in HACS:
 
 1. Open HACS in Home Assistant.
 2. Select the three-dot menu, then **Custom repositories**.
-3. Enter `https://github.com/matt123p/ha-gemini-live`.
+3. Enter `https://github.com/brunofoxmulder/brunofoxmulder-elise-live-test`.
 4. Select **Integration** as the category and add the repository.
 5. Find **Gemini Live** in HACS and select **Download**.
 6. Restart Home Assistant when HACS asks you to.
