@@ -1,6 +1,8 @@
 """Tests for the config flow schema's barge-in and affective dialog settings."""
 
 from typing import Any
+
+from homeassistant.const import CONF_LLM_HASS_API
 import voluptuous as vol
 from elise_live_test.config_flow import (
     _needs_model_specific_refresh,
@@ -268,3 +270,43 @@ def test_affective_dialog_setting_persists_through_reconfigure() -> None:
     )
 
     assert result[CONF_AFFECTIVE_DIALOG] is True
+
+
+def test_multi_api_selection_is_present_and_defaults_to_assist() -> None:
+    """A fresh Élise entry must expose HA/MCP APIs and retain Assist by default."""
+    schema = _schema(PROVIDER_GEMINI)
+    keys = [marker.schema for marker in schema.schema]
+
+    assert CONF_LLM_HASS_API in keys
+    validator = _validator(schema, CONF_LLM_HASS_API)
+    default = next(
+        marker.default()
+        for marker in schema.schema
+        if marker.schema == CONF_LLM_HASS_API
+    )
+    assert default == ["assist"]
+
+
+def test_multi_api_selection_preserves_assist_and_mcp() -> None:
+    """Reconfigure must retain the complete Assist + MCP selection."""
+    selected = ["assist", "agent_memory", "searxng"]
+    schema = _schema(PROVIDER_GEMINI, {CONF_LLM_HASS_API: selected})
+    default = next(
+        marker.default()
+        for marker in schema.schema
+        if marker.schema == CONF_LLM_HASS_API
+    )
+
+    assert default == selected
+
+
+def test_explicit_empty_multi_api_selection_stays_empty() -> None:
+    """An intentional empty selection must never silently restore Assist."""
+    schema = _schema(PROVIDER_GEMINI, {CONF_LLM_HASS_API: []})
+    default = next(
+        marker.default()
+        for marker in schema.schema
+        if marker.schema == CONF_LLM_HASS_API
+    )
+
+    assert default == []
