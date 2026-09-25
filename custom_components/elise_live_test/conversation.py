@@ -168,20 +168,12 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
         """Load HA Assist tools and the final live-model instruction."""
         config = {**self.entry.data, **self.entry.options}
         custom_instruction = config.get(CONF_SYSTEM_INSTRUCTION, "")
-        if self.supports_search_grounding:
-            encourage_web_search = bool(
-                config.get(
-                    CONF_SEARCH_GROUNDING,
-                    DEFAULT_SEARCH_GROUNDING,
-                )
+        encourage_web_search = bool(
+            config.get(
+                CONF_ENCOURAGE_WEB_SEARCH,
+                DEFAULT_ENCOURAGE_WEB_SEARCH,
             )
-        else:
-            encourage_web_search = bool(
-                config.get(
-                    CONF_ENCOURAGE_WEB_SEARCH,
-                    DEFAULT_ENCOURAGE_WEB_SEARCH,
-                )
-            )
+        )
         transcribe_output = bool(
             config.get(self.transcribe_config_key, self.default_transcribe)
         )
@@ -219,7 +211,7 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                 _format_tools_for_live(
                     llm_api.tools,
                     llm_api.custom_serializer,
-                    encourage_web_search and not self.supports_search_grounding,
+                    encourage_web_search,
                 )
             )
             if not transcribe_output and show_text:
