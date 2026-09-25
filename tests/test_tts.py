@@ -9,14 +9,14 @@ from unittest.mock import Mock
 import pytest
 from homeassistant.exceptions import HomeAssistantError
 
-from custom_components.elise_live_test.const import (
+from elise_live_test.const import (
     CONF_SUPPORT_BARGE_IN,
     DOMAIN,
     GEMINI_TURN_STORE_KEY,
 )
-from custom_components.elise_live_test.runtime import AudioStream
-from custom_components.elise_live_test.tts import GeminiLiveTTS
-from custom_components.elise_live_test.utils import streaming_wav_header
+from elise_live_test.runtime import AudioStream
+from elise_live_test.tts import GeminiLiveTTS
+from elise_live_test.utils import streaming_wav_header
 
 
 @dataclass
@@ -51,7 +51,7 @@ async def _message_gen() -> AsyncGenerator[str]:
 def _core_supports_interruption(monkeypatch: pytest.MonkeyPatch):
     """Pretend Core provides the complete TTS interruption path."""
     monkeypatch.setattr(
-        "custom_components.elise_live_test.tts.supports_tts_interruption",
+        "elise_live_test.tts.supports_tts_interruption",
         lambda: True,
     )
 
@@ -77,7 +77,7 @@ async def test_core_interrupt_support_is_only_used_for_barge_in(
 ) -> None:
     """Use Core's optional interruption API only when barge-in is enabled."""
     monkeypatch.setattr(
-        "custom_components.elise_live_test.tts.TTSAudioResponse",
+        "elise_live_test.tts.TTSAudioResponse",
         _InterruptResponse,
     )
     audio = AudioStream()
@@ -105,7 +105,7 @@ async def test_barge_in_remains_compatible_with_legacy_core(
 ) -> None:
     """Keep streaming with barge-in disabled when Core has no interruption API."""
     monkeypatch.setattr(
-        "custom_components.elise_live_test.tts.TTSAudioResponse", _LegacyResponse
+        "elise_live_test.tts.TTSAudioResponse", _LegacyResponse
     )
     audio = AudioStream()
     entity = _make_tts(barge_in=False, audio=audio)
