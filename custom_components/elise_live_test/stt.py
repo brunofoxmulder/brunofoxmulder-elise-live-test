@@ -493,6 +493,7 @@ class LiveModelSTT(SpeechToTextEntity):
         pipeline_context: Context | None = None,
     ) -> SpeechResult:
         """Process audio using the configured live-model client."""
+        config = {**self.entry.data, **self.entry.options}
         turn_id = uuid4().hex[:8]
         show_text_content: str | None = None
         started_at = time.monotonic()
