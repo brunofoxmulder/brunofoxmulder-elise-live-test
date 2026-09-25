@@ -452,11 +452,11 @@ async def test_audio_tool_context_preserves_pipeline_provenance(
     source_context = Context(user_id="voice-user", parent_id="parent-context")
     captured_contexts = []
 
-    async def fake_async_get_api(**kwargs):
-        captured_contexts.append(kwargs["llm_context"].context)
+    async def fake_async_load_tools(hass, config, llm_context):
+        captured_contexts.append(llm_context.context)
         return SimpleNamespace(tools=[], api_prompt="", custom_serializer=None)
 
-    monkeypatch.setattr("elise_live_test.tools.llm.async_get_api", fake_async_get_api)
+    monkeypatch.setattr("elise_live_test.stt.async_load_tools", fake_async_load_tools)
 
     mic = MicStream()
     result_future = asyncio.Future()
