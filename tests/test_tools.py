@@ -26,8 +26,8 @@ def test_selected_api_ids_empty_is_intentional():
 async def test_async_load_tools_requests_all_selected_apis(monkeypatch):
     calls = []
 
-    async def fake_get_api(hass, api_ids, llm_context):
-        calls.append(api_ids)
+    async def fake_get_api(*, hass, llm_hass_api, llm_context):
+        calls.append(llm_hass_api)
         return SimpleNamespace(
             tools=[SimpleNamespace(name="HassTurnOn"), SimpleNamespace(name="Memory")],
         )
@@ -54,7 +54,7 @@ async def test_async_load_tools_empty_selection_does_not_fallback(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_async_load_tools_rejects_reserved_tool_name(monkeypatch):
-    async def fake_get_api(hass, api_ids, llm_context):
+    async def fake_get_api(*, hass, llm_hass_api, llm_context):
         return SimpleNamespace(tools=[SimpleNamespace(name="end_conversation")])
 
     monkeypatch.setattr("elise_live_test.tools.llm.async_get_api", fake_get_api)
