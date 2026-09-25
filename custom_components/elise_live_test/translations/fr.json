@@ -1,0 +1,129 @@
+{
+  "title": "Élise Live",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Choisir le fournisseur vocal",
+        "description": "Élise Live utilise Google Gemini Live ou OpenAI Realtime avec le pipeline vocal Home Assistant.",
+        "data": {
+          "provider": "Fournisseur"
+        }
+      },
+      "provider": {
+        "title": "Connexion à {provider}",
+        "description": "Configurer le fournisseur, la voix et les outils accessibles à cet assistant.",
+        "data": {
+          "api_key": "Clé API",
+          "model": "Modèle vocal",
+          "voice": "Voix",
+          "system_instruction": "Instructions",
+          "detailed_logging": "Journalisation détaillée",
+          "transcribe_gemini": "Transcrire Gemini",
+          "transcribe_gpt": "Transcrire OpenAI",
+          "encourage_web_search": "Encourager la recherche Internet",
+          "show_text": "Afficher le texte",
+          "llm_hass_api": "Outils Home Assistant",
+          "search_grounding": "Recherche Google native",
+          "thinking_level": "Niveau de réflexion",
+          "support_barge_in": "Autoriser l’interruption vocale",
+          "affective_dialog": "Dialogue affectif"
+        },
+        "data_description": {
+          "api_key": "Les données vocales, textes et résultats des outils sont transmis au fournisseur choisi.",
+          "llm_hass_api": "Sélectionner Assist et les groupes souhaités. Tools for Assist fournit Search Services et Weather Forecast. Une sélection vide désactive les outils Home Assistant.",
+          "encourage_web_search": "Encourage un outil de recherche déjà sélectionné ; ne donne pas accès à Internet à lui seul.",
+          "detailed_logging": "Peut enregistrer les transcriptions et les appels d’outils. À activer seulement pour diagnostiquer.",
+          "model": "Modèle utilisé par le fournisseur sélectionné.",
+          "voice": "Voix utilisée pour les réponses audio.",
+          "system_instruction": "Instructions système personnalisées pour Élise.",
+          "transcribe_gemini": "Afficher la transcription des réponses Gemini.",
+          "transcribe_gpt": "Afficher la transcription des réponses OpenAI.",
+          "search_grounding": "Active la recherche Google native du modèle. Laisser désactivé pour utiliser les outils de recherche HA/MCP comme SearXNG.",
+          "thinking_level": "Définit le niveau de réflexion du modèle lorsque cette option est prise en charge.",
+          "show_text": "Afficher également le texte de la réponse.",
+          "support_barge_in": "Permet d’interrompre la réponse vocale lorsque le fournisseur et Home Assistant le prennent en charge.",
+          "affective_dialog": "Active le dialogue affectif lorsque le modèle le prend en charge."
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigurer Élise Live",
+        "description": "Configurer le fournisseur, la voix et les outils accessibles à cet assistant.",
+        "data": {
+          "api_key": "Clé API",
+          "model": "Modèle vocal",
+          "voice": "Voix",
+          "system_instruction": "Instructions",
+          "detailed_logging": "Journalisation détaillée",
+          "transcribe_gemini": "Transcrire Gemini",
+          "transcribe_gpt": "Transcrire OpenAI",
+          "encourage_web_search": "Encourager la recherche Internet",
+          "show_text": "Afficher le texte",
+          "llm_hass_api": "Outils Home Assistant",
+          "search_grounding": "Recherche Google native",
+          "thinking_level": "Niveau de réflexion",
+          "support_barge_in": "Autoriser l’interruption vocale",
+          "affective_dialog": "Dialogue affectif"
+        },
+        "data_description": {
+          "api_key": "Les données vocales, textes et résultats des outils sont transmis au fournisseur choisi.",
+          "llm_hass_api": "Sélectionner Assist et les groupes souhaités. Tools for Assist fournit Search Services et Weather Forecast. Une sélection vide désactive les outils Home Assistant.",
+          "encourage_web_search": "Encourage un outil de recherche déjà sélectionné ; ne donne pas accès à Internet à lui seul.",
+          "detailed_logging": "Peut enregistrer les transcriptions et les appels d’outils. À activer seulement pour diagnostiquer.",
+          "model": "Modèle utilisé par le fournisseur sélectionné.",
+          "search_grounding": "Active la recherche Google native du modèle. Laisser désactivé pour utiliser les outils de recherche HA/MCP comme SearXNG.",
+          "thinking_level": "Définit le niveau de réflexion du modèle lorsque cette option est prise en charge.",
+          "support_barge_in": "Permet d’interrompre la réponse vocale lorsque le fournisseur et Home Assistant le prennent en charge.",
+          "affective_dialog": "Active le dialogue affectif lorsque le modèle le prend en charge."
+        }
+      }
+    },
+    "abort": {
+      "reconfigure_successful": "Élise Live a été reconfigurée."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options Élise Live",
+        "description": "Configurer le fournisseur, la voix et les outils accessibles à cet assistant.",
+        "data": {
+          "api_key": "Clé API",
+          "model": "Modèle vocal",
+          "voice": "Voix",
+          "system_instruction": "Instructions",
+          "detailed_logging": "Journalisation détaillée",
+          "transcribe_gemini": "Transcrire Gemini",
+          "transcribe_gpt": "Transcrire OpenAI",
+          "encourage_web_search": "Encourager la recherche Internet",
+          "show_text": "Afficher le texte",
+          "llm_hass_api": "Outils Home Assistant",
+          "search_grounding": "Recherche Google native",
+          "thinking_level": "Niveau de réflexion",
+          "support_barge_in": "Autoriser l’interruption vocale",
+          "affective_dialog": "Dialogue affectif"
+        },
+        "data_description": {
+          "api_key": "Les données vocales, textes et résultats des outils sont transmis au fournisseur choisi.",
+          "llm_hass_api": "Sélectionner Assist et les groupes souhaités. Tools for Assist fournit Search Services et Weather Forecast. Une sélection vide désactive les outils Home Assistant.",
+          "encourage_web_search": "Encourage un outil de recherche déjà sélectionné ; ne donne pas accès à Internet à lui seul.",
+          "detailed_logging": "Peut enregistrer les transcriptions et les appels d’outils. À activer seulement pour diagnostiquer.",
+          "model": "Modèle utilisé par le fournisseur sélectionné.",
+          "search_grounding": "Active la recherche Google native du modèle. Laisser désactivé pour utiliser les outils de recherche HA/MCP comme SearXNG.",
+          "thinking_level": "Définit le niveau de réflexion du modèle lorsque cette option est prise en charge.",
+          "support_barge_in": "Permet d’interrompre la réponse vocale lorsque le fournisseur et Home Assistant le prennent en charge.",
+          "affective_dialog": "Active le dialogue affectif lorsque le modèle le prend en charge."
+        }
+      }
+    }
+  },
+  "issues": {
+    "spending_cap_exceeded": {
+      "title": "Gemini Live billing unavailable",
+      "description": "The Google AI project used by **{entry_title}** cannot process Gemini Live requests because its spending cap or available prepaid credit balance has been exhausted. [Manage the project's billing]({spending_cap_url}), then try Gemini Live again. This issue will clear automatically after Gemini Live connects successfully."
+    },
+    "openai_no_credits": {
+      "title": "Crédits OpenAI insuffisants",
+      "description": "Le fournisseur OpenAI n’a plus de crédits disponibles. Vérifiez la facturation ou les crédits de votre compte OpenAI."
+    }
+  }
+}
