@@ -79,6 +79,31 @@ def test_exposed_search_instruction_still_requires_search_like_tool():
     assert instruction.startswith("base\n\nYou MUST use")
 
 
+def test_exposed_searxng_search_survives_without_native_grounding():
+    """SearXNG-style HA/MCP search remains usable with Google grounding off."""
+    instruction = _add_search_tool_instruction(
+        "base",
+        [SimpleNamespace(name="searxng_search")],
+        True,
+        native_search_grounding=False,
+    )
+
+    assert instruction.startswith("base\n\nYou MUST use")
+
+
+def test_no_native_grounding_does_not_invent_search_without_exposed_tool():
+    """Google grounding off must not create a search path on its own."""
+    assert (
+        _add_search_tool_instruction(
+            "base",
+            [],
+            True,
+            native_search_grounding=False,
+        )
+        == "base"
+    )
+
+
 def test_stream_resampler_preserves_phase_across_arbitrary_chunks() -> None:
     """Streaming conversion must equal conversion of the contiguous PCM."""
     pcm = b"".join(sample.to_bytes(2, "little", signed=True) for sample in range(10))
