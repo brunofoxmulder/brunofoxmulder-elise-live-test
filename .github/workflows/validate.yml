@@ -40,8 +40,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest pytest-asyncio voluptuous
           git clone --depth 1 --branch 2026.9.3 https://github.com/home-assistant/core.git scratch/ha-core
+          # Core's editable install pulls its runtime requirements. Installing
+          # requirements_all.txt resolves every optional HA integration and can
+          # stall the runner even though Élise tests only need their own deps.
           pip install -e scratch/ha-core
           pip install -r scratch/ha-core/requirements_test.txt
-          pip install -r scratch/ha-core/requirements_all.txt
       - name: Run unit tests
         run: pytest -q
