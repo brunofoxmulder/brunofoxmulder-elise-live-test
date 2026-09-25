@@ -1,6 +1,7 @@
 """Tests for the config flow schema's barge-in and affective dialog settings."""
 
 from typing import Any
+from types import SimpleNamespace
 
 import voluptuous as vol
 from elise_live_test.config_flow import (
@@ -26,6 +27,13 @@ from elise_live_test.const import (
 
 _VALID_VOICE = {PROVIDER_GEMINI: "Puck", PROVIDER_OPENAI: "marin"}
 
+_FAKE_HASS = SimpleNamespace(data={})
+
+
+def _schema(provider: str, config: dict[str, Any] | None = None) -> vol.Schema:
+    """Build a provider schema without depending on registered HA LLM APIs."""
+    return _provider_schema(_FAKE_HASS, provider, config)
+
 
 def _validator(schema: vol.Schema, key: str) -> Any:
     return next(
@@ -41,7 +49,7 @@ def _available_models(schema: vol.Schema) -> list[str]:
 
 
 def test_gemini_models_use_dropdown_and_include_extended_thinking() -> None:
-    schema = _provider_schema(None, PROVIDER_GEMINI)
+    schema = _schema(PROVIDER_GEMINI)
     model_selector = _validator(schema, CONF_MODEL)
 
     assert model_selector.config["mode"] == "dropdown"
@@ -50,16 +58,16 @@ def test_gemini_models_use_dropdown_and_include_extended_thinking() -> None:
 
 def test_search_grounding_is_a_gemini_preference() -> None:
     gemini_keys = [
-        marker.schema for marker in _provider_schema(None, PROVIDER_GEMINI).schema
+        marker.schema for marker in _schema(PROVIDER_GEMINI).schema
     ]
     openai_keys = [
-        marker.schema for marker in _provider_schema(None, PROVIDER_OPENAI).schema
+        marker.schema for marker in _schema(PROVIDER_OPENAI).schema
     ]
 
     assert CONF_SEARCH_GROUNDING in gemini_keys
     assert CONF_SEARCH_GROUNDING not in openai_keys
 
-    result = _provider_schema(None, PROVIDER_GEMINI)(
+    result = _schema(PROVIDER_GEMINI)(
         {
             CONF_API_KEY: "key",
             CONF_MODEL: "gemini-3.8-live",
@@ -76,7 +84,7 @@ def test_thinking_level_only_shown_for_extended_thinking() -> None:
         ("gemini-3.8-live", False),
         ("gemini-3.1-flash-live-preview", False),
     ):
-        schema = _provider_schema(None, PROVIDER_GEMINI, {CONF_MODEL: model})
+        schema = _schema(PROVIDER_GEMINI, {CONF_MODEL: model})
         keys = [marker.schema for marker in schema.schema]
         assert (CONF_THINKING_LEVEL in keys) is expected
 
@@ -216,7 +224,7 @@ def test_affective_dialog_only_shown_for_supported_models() -> None:
         ({CONF_MODEL: "gemini-3.1-flash-live-preview"}, False),
         ({}, False),
     ):
-        schema = _provider_schema(None, PROVIDER_GEMINI, config)
+        schema = _schema(PROVIDER_GEMINI, config)
         keys = [marker.schema for marker in schema.schema]
         assert (CONF_AFFECTIVE_DIALOG in keys) is expected
 
@@ -229,7 +237,7 @@ def test_affective_dialog_only_shown_for_supported_models() -> None:
 
 def test_affective_dialog_defaults_to_false() -> None:
     model = "gemini-2.5-flash-native-audio-preview-12-2025"
-    schema = _provider_schema(None, PROVIDER_GEMINI, {CONF_MODEL: model})
+    schema = _schema(PROVIDER_GEMINI, {CONF_MODEL: model})
 
     result = schema(
         {
