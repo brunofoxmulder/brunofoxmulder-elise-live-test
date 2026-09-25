@@ -563,7 +563,7 @@ class LiveModelSTT(SpeechToTextEntity):
             system_instruction = _add_search_tool_instruction(
                 system_instruction,
                 ha_tools,
-                encourage_web_search and not self.supports_search_grounding,
+                encourage_web_search,
             )
             _LOGGER.debug("Loaded HA Assist LLM API with %d tools", len(ha_tools))
         except Exception as exc:  # noqa: BLE001
@@ -576,7 +576,12 @@ class LiveModelSTT(SpeechToTextEntity):
             system_instruction = _add_search_tool_instruction(
                 system_instruction,
                 [],
-                encourage_web_search,
+                bool(
+                    config.get(
+                        CONF_SEARCH_GROUNDING,
+                        DEFAULT_SEARCH_GROUNDING,
+                    )
+                ),
                 native_search_grounding=True,
             )
         system_instruction = _add_end_conversation_instruction(system_instruction)
@@ -587,7 +592,7 @@ class LiveModelSTT(SpeechToTextEntity):
             _format_tools_for_live(
                 ha_tools,
                 llm_api.custom_serializer,
-                encourage_web_search and not self.supports_search_grounding,
+                encourage_web_search,
             )
             if llm_api
             else []
@@ -1494,20 +1499,12 @@ class LiveModelSTT(SpeechToTextEntity):
                 DEFAULT_SUPPORT_BARGE_IN,
             )
         ) and supports_tts_interruption()
-        if self.supports_search_grounding:
-            encourage_web_search = bool(
-                config.get(
-                    CONF_SEARCH_GROUNDING,
-                    DEFAULT_SEARCH_GROUNDING,
-                )
+        encourage_web_search = bool(
+            config.get(
+                CONF_ENCOURAGE_WEB_SEARCH,
+                DEFAULT_ENCOURAGE_WEB_SEARCH,
             )
-        else:
-            encourage_web_search = bool(
-                config.get(
-                    CONF_ENCOURAGE_WEB_SEARCH,
-                    DEFAULT_ENCOURAGE_WEB_SEARCH,
-                )
-            )
+        )
         show_text = bool(
             config.get(CONF_SHOW_TEXT, DEFAULT_SHOW_TEXT)
         )
