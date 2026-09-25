@@ -1,8 +1,6 @@
 """Tests for the config flow schema's barge-in and affective dialog settings."""
 
 from typing import Any
-from types import SimpleNamespace
-
 import voluptuous as vol
 from elise_live_test.config_flow import (
     _needs_model_specific_refresh,
@@ -27,12 +25,15 @@ from elise_live_test.const import (
 
 _VALID_VOICE = {PROVIDER_GEMINI: "Puck", PROVIDER_OPENAI: "marin"}
 
-_FAKE_HASS = SimpleNamespace(data={})
-
-
 def _schema(provider: str, config: dict[str, Any] | None = None) -> vol.Schema:
-    """Build a provider schema without depending on registered HA LLM APIs."""
-    return _provider_schema(_FAKE_HASS, provider, config)
+    """Build provider schema with LLM API discovery isolated from these UI tests."""
+    from elise_live_test import config_flow
+    original = config_flow.llm.async_get_apis
+    config_flow.llm.async_get_apis = lambda hass: []
+    try:
+        return _provider_schema(None, provider, config)
+    finally:
+        config_flow.llm.async_get_apis = original
 
 
 def _validator(schema: vol.Schema, key: str) -> Any:
@@ -88,7 +89,7 @@ def test_thinking_level_only_shown_for_extended_thinking() -> None:
         keys = [marker.schema for marker in schema.schema]
         assert (CONF_THINKING_LEVEL in keys) is expected
 
-    schema = _provider_schema(
+    schema = _schema(
         PROVIDER_GEMINI,
         {CONF_MODEL: "gemini-3.8-live-extended-thinking"},
     )
@@ -134,7 +135,7 @@ def test_schema_shows_barge_in_for_both_providers(monkeypatch) -> None:
         "elise_live_test.config_flow.supports_tts_interruption", lambda: True
     )
     for provider in (PROVIDER_GEMINI, PROVIDER_OPENAI):
-        schema = _provider_schema(provider)
+        schema = _schema(provider)
         keys = [marker.schema for marker in schema.schema]
         assert CONF_SUPPORT_BARGE_IN in keys
 
@@ -148,7 +149,7 @@ def test_barge_in_hidden_when_core_lacks_interruption_support(
     )
 
     for provider in (PROVIDER_GEMINI, PROVIDER_OPENAI):
-        schema = _provider_schema(provider)
+        schema = _schema(provider)
         keys = [marker.schema for marker in schema.schema]
         assert CONF_SUPPORT_BARGE_IN not in keys
 
@@ -184,7 +185,7 @@ def test_barge_in_defaults_to_false(monkeypatch) -> None:
         "elise_live_test.config_flow.supports_tts_interruption", lambda: True
     )
     for provider in (PROVIDER_GEMINI, PROVIDER_OPENAI):
-        schema = _provider_schema(provider)
+        schema = _schema(provider)
 
         result = schema(
             {
@@ -203,7 +204,7 @@ def test_barge_in_setting_persists_through_reconfigure(monkeypatch) -> None:
         "elise_live_test.config_flow.supports_tts_interruption", lambda: True
     )
     for provider in (PROVIDER_GEMINI, PROVIDER_OPENAI):
-        schema = _provider_schema(provider, {CONF_SUPPORT_BARGE_IN: True})
+        schema = _schema(provider, {CONF_SUPPORT_BARGE_IN: True})
 
         result = schema(
             {
@@ -228,7 +229,7 @@ def test_affective_dialog_only_shown_for_supported_models() -> None:
         keys = [marker.schema for marker in schema.schema]
         assert (CONF_AFFECTIVE_DIALOG in keys) is expected
 
-    schema = _provider_schema(
+    schema = _schema(
         PROVIDER_OPENAI, {CONF_MODEL: "gpt-realtime-2.1"}
     )
     keys = [marker.schema for marker in schema.schema]
@@ -253,7 +254,7 @@ def test_affective_dialog_defaults_to_false() -> None:
 
 def test_affective_dialog_setting_persists_through_reconfigure() -> None:
     model = "gemini-2.5-flash-native-audio-preview-12-2025"
-    schema = _provider_schema(
+    schema = _schema(
         PROVIDER_GEMINI,
         {CONF_MODEL: model, CONF_AFFECTIVE_DIALOG: True},
     )
