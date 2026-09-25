@@ -303,7 +303,7 @@ class GeminiLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if _needs_model_specific_refresh(user_input):
                 return self.async_show_form(
                     step_id="provider",
-                    data_schema=_provider_schema(selected_provider, user_input),
+                    data_schema=_provider_schema(self.hass, selected_provider, user_input),
                     description_placeholders={
                         "provider": "Google Gemini",
                     },
@@ -337,7 +337,7 @@ class GeminiLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if _needs_model_specific_refresh(user_input):
                 return self.async_show_form(
                     step_id="reconfigure",
-                    data_schema=_provider_schema(provider, user_input),
+                    data_schema=_provider_schema(self.hass, provider, user_input),
                 )
             user_input = _strip_unsupported_settings(user_input)
             user_input[CONF_PROVIDER] = provider
@@ -373,7 +373,7 @@ class GeminiLiveOptionsFlowHandler(config_entries.OptionsFlow):
             if _needs_model_specific_refresh(user_input):
                 return self.async_show_form(
                     step_id="init",
-                    data_schema=_provider_schema(provider, user_input),
+                    data_schema=_provider_schema(self.hass, provider, user_input),
                 )
             user_input = _strip_unsupported_settings(user_input)
             user_input[CONF_PROVIDER] = provider
