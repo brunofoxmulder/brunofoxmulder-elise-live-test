@@ -504,28 +504,27 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
             if voice_turn.assistant_text_stream is not None:
                 if not isinstance(voice_turn.audio, AudioStream):
                     raise RuntimeError("Streaming transcript has no streaming audio")
+                # Keep the TTS stream discoverable even if Gemini has not emitted
+                # an output transcription yet. The full text stream closes only
+                # when the Live session ends, which may be much later than its audio.
                 turn_store.add_streaming_audio(
                     voice_turn.assistant_text_stream,
                     voice_turn.audio,
+                    fallback_assistant_text,
                 )
 
-                async def transcript_deltas():
-                    """Yield the live model's response transcript into Home Assistant."""
-                    yield {"role": "assistant"}
-                    received_text = False
-                    async for chunk in voice_turn.assistant_text_stream.async_chunks():
-                        received_text = True
-                        yield {"content": chunk}
-                    if not received_text:
-                        yield {"content": fallback_assistant_text}
-
-                async for _content in chat_log.async_add_delta_content_stream(
-                    self.entity_id,
-                    transcript_deltas(),
-                ):
-                    pass
+                # Assist runs the conversation stage before TTS. Waiting for every
+                # transcript chunk here holds playback until the Live receive loop
+                # finishes (or times out). Return the text already available and let
+                # TTS consume the audio stream while Gemini is still generating.
                 assistant_text = (
                     voice_turn.assistant_text_stream.text or fallback_assistant_text
+                )
+                chat_log.async_add_assistant_content_without_tools(
+                    conversation.AssistantContent(
+                        agent_id=self.entity_id,
+                        content=assistant_text,
+                    )
                 )
             else:
                 assistant_text = fallback_assistant_text
