@@ -14,7 +14,7 @@
   "iot_class": "cloud_push",
   "issue_tracker": "https://github.com/brunofoxmulder/brunofoxmulder-elise-live-test/issues",
   "requirements": [
-    "google-genai==2.21.0",
+    "google-genai==2.25.0",
     "msgpack==1.1.2"
   ],
   "version": "0.1.0-test.1"
