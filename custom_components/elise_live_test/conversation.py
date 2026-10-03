@@ -71,6 +71,21 @@ from .utils import pcm_to_wav, resample_24k_to_16k
 
 _LOGGER = logging.getLogger(__name__)
 
+
+async def _async_iter_with_inactivity_timeout(
+    responses: AsyncIterable[Any],
+    timeout_seconds: float,
+) -> AsyncIterator[Any]:
+    """Timeout while awaiting a model event, excluding Home Assistant tool work."""
+    response_iterator = responses.__aiter__()
+    while True:
+        try:
+            async with asyncio.timeout(timeout_seconds):
+                response = await anext(response_iterator)
+        except StopAsyncIteration:
+            return
+        yield response
+
 _CALENDAR_TOOL_INSTRUCTION = (
     "When the user asks about calendar events, appointments, meetings, or what is "
     "scheduled on a date, you MUST call the relevant Home Assistant calendar tool "
@@ -341,99 +356,104 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
             ) as session:
                 await session.send_text(user_text)
 
-                async with asyncio.timeout(30):
-                    async for response in session.receive():
-                        if response.tool_calls:
-                            function_responses = []
-                            for call in response.tool_calls:
-                                tool_name = call.name or ""
-                                tool_args = call.arguments
-                                call_id = call.call_id
-                                _LOGGER.debug(
-                                    "[turn=%s] LLM tool call name=%s id=%s arguments=%r",
-                                    turn_id,
-                                    tool_name,
-                                    call_id,
-                                    tool_args,
-                                )
+                async for response in _async_iter_with_inactivity_timeout(
+                    session.receive(), timeout_seconds=30
+                ):
+                    if response.tool_calls:
+                        function_responses = []
+                        for call in response.tool_calls:
+                            tool_name = call.name or ""
+                            tool_args = call.arguments
+                            call_id = call.call_id
+                            _LOGGER.debug(
+                                "[turn=%s] LLM tool call name=%s id=%s arguments=%r",
+                                turn_id,
+                                tool_name,
+                                call_id,
+                                tool_args,
+                            )
 
-                                if tool_name == END_CONVERSATION_TOOL_NAME:
-                                    conversation_ended = True
-                                    session_manager.complete_conversation(
-                                        conversation_id
+                            if tool_name == END_CONVERSATION_TOOL_NAME:
+                                conversation_ended = True
+                                session_manager.complete_conversation(
+                                    conversation_id
+                                )
+                                tool_result = {
+                                    "success": True,
+                                    "conversation_ended": True,
+                                }
+                            elif tool_name == SHOW_TEXT_TOOL_NAME:
+                                show_text_content = tool_args.get("text")
+                                tool_result = {
+                                    "success": True,
+                                    "displayed": True,
+                                }
+                            elif tool_name == HISTORY_TOOL_NAME:
+                                try:
+                                    tool_result = await async_handle_history_tool(
+                                        self.hass, tool_args
                                     )
-                                    tool_result = {
-                                        "success": True,
-                                        "conversation_ended": True,
-                                    }
-                                elif tool_name == SHOW_TEXT_TOOL_NAME:
-                                    show_text_content = tool_args.get("text")
-                                    tool_result = {
-                                        "success": True,
-                                        "displayed": True,
-                                    }
-                                elif tool_name == HISTORY_TOOL_NAME:
-                                    try:
-                                        tool_result = await async_handle_history_tool(
-                                            self.hass, tool_args
+                                except Exception as err:  # noqa: BLE001
+                                    _LOGGER.error("History tool failed: %s", err)
+                                    tool_result = {"error": str(err)}
+                            elif llm_api is not None:
+                                try:
+                                    tool_result = await llm_api.async_call_tool(
+                                        llm.ToolInput(
+                                            tool_name=tool_name,
+                                            tool_args=tool_args,
                                         )
-                                    except Exception as err:  # noqa: BLE001
-                                        _LOGGER.error("History tool failed: %s", err)
-                                        tool_result = {"error": str(err)}
-                                elif llm_api is not None:
-                                    try:
-                                        tool_result = await llm_api.async_call_tool(
-                                            llm.ToolInput(
-                                                tool_name=tool_name,
-                                                tool_args=tool_args,
-                                            )
-                                        )
-                                    except Exception as err:  # noqa: BLE001
-                                        _LOGGER.error("Tool %s failed: %s", tool_name, err)
-                                        tool_result = {"error": str(err)}
-                                else:
-                                    tool_result = {"error": "HA LLM API not available"}
-                                tool_result = _validate_tool_results(tool_result)
+                                    )
+                                except Exception as err:  # noqa: BLE001
+                                    _LOGGER.error("Tool %s failed: %s", tool_name, err)
+                                    tool_result = {"error": str(err)}
+                            else:
+                                tool_result = {"error": "HA LLM API not available"}
+                            tool_result = _validate_tool_results(tool_result)
 
-                                _LOGGER.debug(
-                                    "[turn=%s] LLM tool response name=%s id=%s response=%r",
-                                    turn_id,
-                                    tool_name,
-                                    call_id,
-                                    tool_result,
-                                )
-
-                                function_responses.append(
-                                    LiveToolResponse(tool_name, call_id, tool_result)
-                                )
-
-                            if function_responses:
-                                await session.send_tool_responses(function_responses)
-
-                        if response.text:
-                            text_response_parts.append(response.text)
-                        if response.audio:
-                            audio_response_chunks.append(response.audio)
-                            resampled_pcm_chunks.append(
-                                resample_24k_to_16k(response.audio)
+                            _LOGGER.debug(
+                                "[turn=%s] LLM tool response name=%s id=%s response=%r",
+                                turn_id,
+                                tool_name,
+                                call_id,
+                                tool_result,
                             )
-                            wav_data = pcm_to_wav(
-                                b"".join(resampled_pcm_chunks),
-                                16000,
-                            )
-                        if response.output_transcript:
-                            text_response_parts.append(response.output_transcript)
 
-                        if response.turn_complete:
-                            if native_audio_model and not audio_response_chunks:
-                                _LOGGER.warning(
-                                    "[turn=%s] text path turnComplete before audio; waiting",
-                                    turn_id,
-                                )
-                                continue
-                            break
+                            function_responses.append(
+                                LiveToolResponse(tool_name, call_id, tool_result)
+                            )
+
+                        if function_responses:
+                            await session.send_tool_responses(function_responses)
+
+                    if response.text:
+                        text_response_parts.append(response.text)
+                    if response.audio:
+                        audio_response_chunks.append(response.audio)
+                        resampled_pcm_chunks.append(
+                            resample_24k_to_16k(response.audio)
+                        )
+                        wav_data = pcm_to_wav(
+                            b"".join(resampled_pcm_chunks),
+                            16000,
+                        )
+                    if response.output_transcript:
+                        text_response_parts.append(response.output_transcript)
+
+                    if response.turn_complete:
+                        if native_audio_model and not audio_response_chunks:
+                            _LOGGER.warning(
+                                "[turn=%s] text path turnComplete before audio; waiting",
+                                turn_id,
+                            )
+                            continue
+                        break
         except TimeoutError:
-            _LOGGER.error("[turn=%s] %s text path timed out", turn_id, self.integration_name)
+            _LOGGER.error(
+                "[turn=%s] %s text path timed out waiting for a model response",
+                turn_id,
+                self.integration_name,
+            )
             return None
         except Exception as exc:  # noqa: BLE001
             if _is_connection_closed_ok(exc):
