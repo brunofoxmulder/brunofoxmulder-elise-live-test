@@ -95,7 +95,9 @@ async def test_gemini_tool_responses_wrap_text_as_json(monkeypatch):
             self.tool_responses = function_responses
 
     class _FakeGenaiModule:
-        types = SimpleNamespace(FunctionResponse=lambda **kwargs: SimpleNamespace(**kwargs))
+        types = SimpleNamespace(
+            FunctionResponse=lambda **kwargs: SimpleNamespace(**kwargs)
+        )
 
     monkeypatch.setitem(
         sys.modules, "google", SimpleNamespace(genai=_FakeGenaiModule)
@@ -107,7 +109,9 @@ async def test_gemini_tool_responses_wrap_text_as_json(monkeypatch):
 
     await session.send_tool_responses(
         [
-            LiveToolResponse("weather_forecast", "weather-1", "Aujourd'hui : 14 °C"),
+            LiveToolResponse(
+                "weather_forecast", "weather-1", "Aujourd'hui : 14 °C"
+            ),
             LiveToolResponse("calendar_events", "calendar-1", {"events": []}),
         ]
     )
