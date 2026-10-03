@@ -27,6 +27,7 @@ from elise_live_test.stt import (
     GeminiLiveSTT,
     GPTRealtimeSTT,
     _add_search_tool_instruction,
+    _annotate_home_action_result,
 )
 from elise_live_test.utils import PCM24kTo16kStreamResampler, resample_24k_to_16k
 from homeassistant.components.stt import (
@@ -49,6 +50,37 @@ MIC_CHUNK = b"\x00\x00" * 3200
 EXTRA_MIC_CHUNKS = 2
 
 ENTITY_CLASSES = [GeminiLiveSTT, GPTRealtimeSTT]
+
+
+def test_home_action_confirmation_uses_only_current_successful_entity() -> None:
+    result = {
+        "response_type": "action_done",
+        "data": {
+            "success": [{"name": "Lampe entrée", "type": "entity", "id": "light.entree"}],
+            "failed": [],
+        },
+    }
+
+    annotated = _annotate_home_action_result("assist__intent__HassTurnOn", result)
+
+    assert annotated["spoken_confirmation_targets"] == ["Lampe entrée"]
+    assert "salon" not in str(annotated).lower()
+    assert "spoken_confirmation_targets" not in result
+    assert _annotate_home_action_result("assist__intent__HassTurnOff", result)[
+        "spoken_confirmation_targets"
+    ] == ["Lampe entrée"]
+
+
+def test_failed_or_unrelated_tools_do_not_claim_action_success() -> None:
+    failed = {
+        "response_type": "action_done",
+        "data": {
+            "success": [{"name": "Lampe entrée", "type": "entity"}],
+            "failed": [{"name": "Lampe salon", "type": "entity"}],
+        },
+    }
+    assert _annotate_home_action_result("assist__intent__HassTurnOn", failed) is failed
+    assert _annotate_home_action_result("GetHistory", failed) is failed
 
 
 @pytest.fixture(autouse=True)
