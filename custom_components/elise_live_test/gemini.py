@@ -145,7 +145,11 @@ class GeminiLiveSession:
                 types.FunctionResponse(
                     name=response.name,
                     id=response.call_id,
-                    response=response.response,
+                    response=(
+                        response.response
+                        if isinstance(response.response, dict)
+                        else {"result": response.response}
+                    ),
                 )
                 for response in responses
             ]
