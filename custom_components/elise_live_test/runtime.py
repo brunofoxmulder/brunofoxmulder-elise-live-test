@@ -185,7 +185,9 @@ class TurnStore:
         """Initialize the turn store."""
         self._voice_turns: deque[PipelineTurn] = deque(maxlen=100)
         self._audio: deque[tuple[str, bytes | AudioStream]] = deque(maxlen=100)
-        self._streaming_audio: deque[tuple[TextStream, AudioStream, str | None]] = deque(maxlen=100)
+        self._streaming_audio: deque[
+            tuple[TextStream, AudioStream, str | None]
+        ] = deque(maxlen=100)
 
     def add_voice_turn(self, turn: PipelineTurn) -> None:
         """Store a voice turn for the conversation stage."""
@@ -259,11 +261,20 @@ class TurnStore:
 
     def take_streaming_audio(self, initial_text: str) -> AudioStream | None:
         """Take streaming audio whose transcript matches the TTS input."""
-        for index, (text_stream, audio_stream, match_text) in enumerate(self._streaming_audio):
+        for index, (text_stream, audio_stream, match_text) in enumerate(
+            self._streaming_audio
+        ):
             transcript = text_stream.text
-            if initial_text == match_text or (transcript and (
-                transcript.startswith(initial_text) or initial_text.startswith(transcript)
-            )):
+            if (
+                (match_text is not None and initial_text == match_text)
+                or (
+                    transcript
+                    and (
+                        transcript.startswith(initial_text)
+                        or initial_text.startswith(transcript)
+                    )
+                )
+            ):
                 del self._streaming_audio[index]
                 _LOGGER.debug(
                     "Matched streaming audio for TTS input prefix %r",
