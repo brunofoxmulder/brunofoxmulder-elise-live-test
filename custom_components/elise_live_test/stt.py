@@ -23,8 +23,8 @@ from homeassistant.components.stt import (
     SpeechToTextEntity,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_LLM_HASS_API
 from homeassistant.core import Context, HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import chat_session, llm
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -49,22 +49,22 @@ from .const import (
     CONF_ENCOURAGE_WEB_SEARCH,
     CONF_MODEL,
     CONF_PROVIDER,
+    CONF_RESPONSE_TIMEOUT,
     CONF_SEARCH_GROUNDING,
     CONF_SYSTEM_INSTRUCTION,
-    CONF_SHOW_TEXT,
     CONF_SUPPORT_BARGE_IN,
     CONF_THINKING_LEVEL,
     CONF_TRANSCRIBE_GEMINI,
     CONF_TRANSCRIBE_GPT,
     CONF_VOICE,
     DEFAULT_AFFECTIVE_DIALOG,
+    DEFAULT_RESPONSE_TIMEOUT,
     DEFAULT_SUPPORT_BARGE_IN,
     DEFAULT_THINKING_LEVEL,
     DEFAULT_TRANSCRIBE_GEMINI,
     DEFAULT_TRANSCRIBE_GPT,
     DEFAULT_ENCOURAGE_WEB_SEARCH,
     DEFAULT_SYSTEM_INSTRUCTION,
-    DEFAULT_SHOW_TEXT,
     DEFAULT_SEARCH_GROUNDING,
     DOMAIN,
     GEMINI_LIVE_TTS_PLACEHOLDER,
@@ -76,7 +76,6 @@ from .const import (
     SUPPORTED_LANGUAGES,
 )
 from .openai import OpenAIRealtimeClient
-from .tools import async_load_tools
 from .runtime import (
     AudioStream,
     PipelineTurn,
@@ -107,8 +106,6 @@ _SEARCH_TOOL_INSTRUCTION = (
     "Do not guess current external facts when the search tool can verify them."
 )
 
-RESPONSE_INACTIVITY_TIMEOUT = 30.0
-
 _SPENDING_CAP_ERROR_MARKER = "exceeded its monthly spending cap"
 _SPENDING_CAP_ISSUE_PREFIX = "spending_cap_exceeded"
 _SPENDING_CAP_URL = "https://ai.studio/spend"
@@ -129,9 +126,7 @@ _PREPAYMENT_CREDITS_USER_MESSAGE = (
 
 _OPENAI_NO_CREDITS_ERROR_MARKER = "no credits remaining"
 _OPENAI_NO_CREDITS_ISSUE_PREFIX = "openai_no_credits"
-_OPENAI_NO_CREDITS_URL = (
-    "https://platform.openai.com/settings/organization/billing/"
-)
+_OPENAI_NO_CREDITS_URL = "https://platform.openai.com/settings/organization/billing/"
 _OPENAI_NO_CREDITS_USER_MESSAGE = (
     "GPT Realtime is unavailable because your OpenAI account has no credits "
     f"remaining. Please go to {_OPENAI_NO_CREDITS_URL} to add credits."
@@ -163,43 +158,6 @@ _END_CONVERSATION_TOOL = LiveTool(
         "additionalProperties": False,
     },
 )
-
-SHOW_TEXT_TOOL_NAME = "show_text"
-
-_SHOW_TEXT_INSTRUCTION = (
-    "The user WILL NOT see the transcription of what you say. "
-    f"You MUST call {SHOW_TEXT_TOOL_NAME} whenever your response contains a lot of "
-    "information or would be easier to scan, follow, copy, or refer back to in writing. "
-    "This includes multi-step instructions, detailed or long lists, comparisons, schedules, "
-    "names, dates, links, code, and other precise details. Err on the side of showing text "
-    "for detailed or information-dense answers. When using it, call it as your FIRST action, "
-    "before speaking any part of the answer. Put the complete useful written content in "
-    f"the {SHOW_TEXT_TOOL_NAME} call, then give a concise spoken summary. "
-    "Do not call it for a simple, brief answer. This function is the only way the user "
-    "will see any text from you."
-)
-
-_SHOW_TEXT_TOOL = LiveTool(
-    name=SHOW_TEXT_TOOL_NAME,
-    description=(
-        "Display text or markdown to the user before speaking. Use this proactively as your "
-        "first action whenever a response "
-        "contains substantial information or details that are easier to scan, follow, "
-        "copy, or revisit in writing, including instructions, lists, comparisons, "
-        "schedules, names, dates, links, and code."
-    ),
-    parameters={
-        "type": "object",
-        "properties": {
-            "text": {
-                "type": "string",
-                "description": "The text or markdown formatted text to display to the user.",
-            }
-        },
-        "required": ["text"],
-    },
-)
-
 
 
 def _is_search_tool_name(name: str) -> bool:
@@ -248,6 +206,7 @@ def _openai_no_credits_issue_id(entry_id: str) -> str:
 # ---------------------------------------------------------------------------
 # Schema / tool helpers
 # ---------------------------------------------------------------------------
+
 
 def _format_tool_for_live(
     tool: llm.Tool,
@@ -314,19 +273,6 @@ def _add_end_conversation_instruction(system_instruction: str) -> str:
     return f"{system_instruction}\n\n{_END_CONVERSATION_INSTRUCTION}"
 
 
-def _add_show_text_tool(
-    tools: list[LiveTool],
-) -> list[LiveTool]:
-    """Add the integration-owned show text callback."""
-    return [*tools, _SHOW_TEXT_TOOL]
-
-
-def _add_show_text_instruction(system_instruction: str) -> str:
-    """Tell the live model to use the show_text callback to show text to the user."""
-    return f"{system_instruction}\n\n{_SHOW_TEXT_INSTRUCTION}"
-
-
-
 def _add_search_tool_instruction(
     system_instruction: str,
     tools: list[llm.Tool],
@@ -334,9 +280,7 @@ def _add_search_tool_instruction(
     native_search_grounding: bool = False,
 ) -> str:
     """Tell the model when to use native or exposed web search."""
-    has_exposed_search_tool = any(
-        _is_search_tool_name(tool.name) for tool in tools
-    )
+    has_exposed_search_tool = any(_is_search_tool_name(tool.name) for tool in tools)
     if not encourage_web_search or not (
         native_search_grounding or has_exposed_search_tool
     ):
@@ -358,6 +302,7 @@ def _validate_tool_results(value: Any) -> Any:
 # ---------------------------------------------------------------------------
 # PCM diagnostics helper
 # ---------------------------------------------------------------------------
+
 
 def _analyse_pcm(pcm: bytes, sample_rate: int = 16000) -> str:
     """Return a one-line diagnostic string for a raw 16-bit signed mono PCM buffer."""
@@ -394,6 +339,7 @@ def _analyse_pcm(pcm: bytes, sample_rate: int = 16000) -> str:
 # Platform setup
 # ---------------------------------------------------------------------------
 
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -409,6 +355,7 @@ async def async_setup_entry(
 # ---------------------------------------------------------------------------
 # STT Entity
 # ---------------------------------------------------------------------------
+
 
 class LiveModelSTT(SpeechToTextEntity):
     """Shared speech-to-text pipeline for realtime model providers."""
@@ -452,6 +399,16 @@ class LiveModelSTT(SpeechToTextEntity):
     def unique_id(self) -> str:
         return self._attr_unique_id
 
+    def _effective_support_barge_in(self) -> bool:
+        """Return whether barge-in is both configured and supported by Core."""
+        config = {**self.entry.data, **self.entry.options}
+        return bool(
+            config.get(
+                CONF_SUPPORT_BARGE_IN,
+                DEFAULT_SUPPORT_BARGE_IN,
+            )
+        ) and supports_tts_interruption()
+
     @property
     def audio_processing(self) -> SpeechAudioProcessing:
         """Let the live provider own turn detection while barge-in is enabled.
@@ -461,12 +418,7 @@ class LiveModelSTT(SpeechToTextEntity):
         barge-in enabled the provider's own VAD decides when the user stops
         and starts speaking, so the stream must stay open.
         """
-        config = {**self.entry.data, **self.entry.options}
-
-        if not config.get(
-            CONF_SUPPORT_BARGE_IN,
-            DEFAULT_SUPPORT_BARGE_IN,
-        ):
+        if not self._effective_support_barge_in():
             return DEFAULT_AUDIO_PROCESSING
 
         return SpeechAudioProcessing(
@@ -485,7 +437,6 @@ class LiveModelSTT(SpeechToTextEntity):
         custom_instruction: str,
         transcribe_output: bool,
         encourage_web_search: bool,
-        show_text: bool,
         support_barge_in: bool,
         result_future: asyncio.Future[SpeechResult],
         conversation_id: str,
@@ -495,7 +446,6 @@ class LiveModelSTT(SpeechToTextEntity):
         """Process audio using the configured live-model client."""
         config = {**self.entry.data, **self.entry.options}
         turn_id = uuid4().hex[:8]
-        show_text_content: str | None = None
         started_at = time.monotonic()
         entry_data = self.hass.data[self.integration_domain][self.entry.entry_id]
         session_manager = entry_data[self.session_manager_key]
@@ -532,45 +482,55 @@ class LiveModelSTT(SpeechToTextEntity):
         llm_api: llm.APIInstance | None = None
         ha_tools: list[llm.Tool] = []
         system_instruction = custom_instruction or self.default_system_instruction
+        config = {**self.entry.data, **self.entry.options}
+        response_inactivity_timeout = float(
+            config.get(CONF_RESPONSE_TIMEOUT, DEFAULT_RESPONSE_TIMEOUT)
+        )
+        api_ids = config.get(CONF_LLM_HASS_API, [llm.LLM_API_ASSIST])
 
-        try:
-            llm_api = await async_load_tools(
-                self.hass,
-                config,
-                llm.LLMContext(
-                    platform=self.integration_domain,
-                    context=(
-                        pipeline_context
-                        if pipeline_context is not None
-                        else Context()
+        if api_ids:
+            try:
+                llm_api = await llm.async_get_api(
+                    hass=self.hass,
+                    api_id=api_ids,
+                    llm_context=llm.LLMContext(
+                        platform=self.integration_domain,
+                        context=(
+                            pipeline_context
+                            if pipeline_context is not None
+                            else Context()
+                        ),
+                        language=metadata.language or "en",
+                        assistant="conversation",
+                        device_id=device_id,
                     ),
-                    language=metadata.language or "en",
-                    assistant="conversation",
-                    device_id=device_id,
-                ),
-            )
-            if llm_api is None:
-                raise HomeAssistantError("No Home Assistant LLM APIs selected")
-            ha_tools = llm_api.tools
-
-            api_prompt = llm_api.api_prompt
-            if custom_instruction:
-                system_instruction = f"{custom_instruction}\n\n{api_prompt}"
-            else:
-                system_instruction = (
-                    self.default_system_instruction + "\n\n" + api_prompt
                 )
-            system_instruction = _add_search_tool_instruction(
-                system_instruction,
-                ha_tools,
-                encourage_web_search,
-            )
-            _LOGGER.debug("Loaded HA Assist LLM API with %d tools", len(ha_tools))
-        except Exception as exc:  # noqa: BLE001
-            _LOGGER.warning(
-                "Could not load HA Assist LLM API: %s. Tools will be unavailable.",
-                exc,
-            )
+                ha_tools = llm_api.tools
+
+                api_prompt = llm_api.api_prompt
+                if custom_instruction:
+                    system_instruction = f"{custom_instruction}\n\n{api_prompt}"
+                else:
+                    system_instruction = (
+                        self.default_system_instruction + "\n\n" + api_prompt
+                    )
+                system_instruction = _add_search_tool_instruction(
+                    system_instruction,
+                    ha_tools,
+                    encourage_web_search and not self.supports_search_grounding,
+                )
+                _LOGGER.debug(
+                    "Loaded selected Home Assistant LLM APIs with %d tools",
+                    len(ha_tools),
+                )
+            except Exception as exc:  # noqa: BLE001
+                _LOGGER.warning(
+                    "Could not load selected Home Assistant LLM APIs: %s. "
+                    "Tools will be unavailable.",
+                    exc,
+                )
+        else:
+            _LOGGER.debug("No Home Assistant LLM APIs selected")
 
         if self.supports_search_grounding:
             system_instruction = _add_search_tool_instruction(
@@ -585,8 +545,6 @@ class LiveModelSTT(SpeechToTextEntity):
                 native_search_grounding=True,
             )
         system_instruction = _add_end_conversation_instruction(system_instruction)
-        if not transcribe_output and show_text:
-            system_instruction = _add_show_text_instruction(system_instruction)
 
         live_tools = _add_end_conversation_tool(
             _format_tools_for_live(
@@ -597,8 +555,6 @@ class LiveModelSTT(SpeechToTextEntity):
             if llm_api
             else []
         )
-        if not transcribe_output and show_text:
-            live_tools = _add_show_text_tool(live_tools)
         live_tools = add_history_tool(live_tools)
         _LOGGER.debug(
             "Exposing %d tools to the live model: %s",
@@ -606,9 +562,7 @@ class LiveModelSTT(SpeechToTextEntity):
             [definition.name for definition in live_tools],
         )
 
-        _LOGGER.warning(
-            "[turn=%s] creating provider client", turn_id
-        )
+        _LOGGER.warning("[turn=%s] creating provider client", turn_id)
         client = await self._async_create_client(api_key)
         _LOGGER.warning(
             "[turn=%s] provider client created tool_count=%d system_instruction_chars=%d",
@@ -628,9 +582,7 @@ class LiveModelSTT(SpeechToTextEntity):
                     CONF_AFFECTIVE_DIALOG, DEFAULT_AFFECTIVE_DIALOG
                 )
             ),
-            search_grounding=(
-                self.supports_search_grounding and encourage_web_search
-            ),
+            search_grounding=(self.supports_search_grounding and encourage_web_search),
             thinking_level=(
                 {**self.entry.data, **self.entry.options}.get(
                     CONF_THINKING_LEVEL,
@@ -654,9 +606,7 @@ class LiveModelSTT(SpeechToTextEntity):
             live_config.thinking_level,
         )
         if support_barge_in:
-            _LOGGER.debug(
-                "[turn=%s] barge-in enabled for provider session", turn_id
-            )
+            _LOGGER.debug("[turn=%s] barge-in enabled for provider session", turn_id)
 
         native_audio_model = "native-audio" in (model or "")
         _LOGGER.warning(
@@ -699,7 +649,6 @@ class LiveModelSTT(SpeechToTextEntity):
             turn_id,
             conversation_id,
         )
-        session_unresponsive = False
         async with session_manager.acquire(
             conversation_id,
             client,
@@ -740,16 +689,6 @@ class LiveModelSTT(SpeechToTextEntity):
                     async for chunk in stream:
                         if not chunk:
                             continue
-                        if (
-                            not support_barge_in
-                            and gemini_replied.is_set()
-                        ):
-                            _LOGGER.warning(
-                                "[turn=%s] send_audio stopped because the model started replying",
-                                turn_id,
-                            )
-                            break
-
                         if first_chunk:
                             first_chunk = False
                             if chunk[:4] == b"RIFF":
@@ -780,9 +719,7 @@ class LiveModelSTT(SpeechToTextEntity):
                             await session.send_audio(dispatch_chunk)
                             audio_sent = True
 
-                    if len(audio_buffer) > 0 and (
-                        support_barge_in or not gemini_replied.is_set()
-                    ):
+                    if len(audio_buffer) > 0:
                         chunk_count += 1
                         dispatch_chunk = bytes(audio_buffer)
                         if diagnostics_enabled:
@@ -803,9 +740,7 @@ class LiveModelSTT(SpeechToTextEntity):
                             _analyse_pcm(b"".join(pcm_for_diag)),
                         )
 
-                    if audio_sent and (
-                        support_barge_in or not gemini_replied.is_set()
-                    ):
+                    if audio_sent:
                         _LOGGER.debug("[turn=%s] signalling audio stream end", turn_id)
                         await session.end_audio()
                 except asyncio.CancelledError:
@@ -825,7 +760,7 @@ class LiveModelSTT(SpeechToTextEntity):
 
             async def receive_responses() -> None:
                 nonlocal audio_response_bytes, audio_response_chunk_count
-                nonlocal last_response_activity, show_text_content
+                nonlocal last_response_activity
                 replacement_response_pending = False
                 try:
                     _LOGGER.warning("[turn=%s] receive_responses started", turn_id)
@@ -848,9 +783,7 @@ class LiveModelSTT(SpeechToTextEntity):
                                 turn_id,
                             )
                         if response.user_activity_stopped:
-                            _LOGGER.debug(
-                                "[turn=%s] user activity stopped", turn_id
-                            )
+                            _LOGGER.debug("[turn=%s] user activity stopped", turn_id)
                         if response.interrupted:
                             # An interrupted generation is followed by a
                             # replacement response in the same provider turn.
@@ -908,12 +841,6 @@ class LiveModelSTT(SpeechToTextEntity):
                                         "success": True,
                                         "conversation_ended": True,
                                     }
-                                elif tool_name == SHOW_TEXT_TOOL_NAME:
-                                    show_text_content = tool_args.get("text")
-                                    tool_result = {
-                                        "success": True,
-                                        "displayed": True,
-                                    }
                                 elif tool_name == HISTORY_TOOL_NAME:
                                     try:
                                         tool_result = await async_handle_history_tool(
@@ -932,7 +859,9 @@ class LiveModelSTT(SpeechToTextEntity):
                                             tool_input
                                         )
                                     except Exception as err:  # noqa: BLE001
-                                        _LOGGER.error("Tool %s failed: %s", tool_name, err)
+                                        _LOGGER.error(
+                                            "Tool %s failed: %s", tool_name, err
+                                        )
                                         tool_result = {"error": str(err)}
                                 else:
                                     tool_result = {"error": "HA LLM API not available"}
@@ -1119,6 +1048,14 @@ class LiveModelSTT(SpeechToTextEntity):
             async def publish_streaming_turn() -> None:
                 """Release the pipeline once the live model starts producing audio."""
                 await first_audio.wait()
+                if not support_barge_in:
+                    # Do not advance Home Assistant to conversation/TTS while
+                    # Core's external VAD is still consuming microphone audio.
+                    # Some satellites otherwise stop the stream without closing
+                    # its generator, leaving both this task and the device stuck
+                    # until the response inactivity timeout. The model's audio
+                    # can safely queue in AudioStream while external VAD finishes.
+                    await send_task
                 if not input_transcript_parts:
                     try:
                         await asyncio.wait_for(
@@ -1129,15 +1066,11 @@ class LiveModelSTT(SpeechToTextEntity):
                         pass
 
                 user_text = (
-                    "".join(input_transcript_parts).strip()
-                    or fallback_user_text
+                    "".join(input_transcript_parts).strip() or fallback_user_text
                 )
                 # HA persistently caches TTS audio by message. A per-turn message
                 # prevents it from replaying an earlier live-model audio stream.
-                if not transcribe_output and show_text and show_text_content is not None:
-                    tts_message = show_text_content
-                else:
-                    tts_message = f"{self.tts_placeholder} {turn_id}"
+                tts_message = f"{self.tts_placeholder} {turn_id}"
                 turn_store.add_voice_turn(
                     PipelineTurn(
                         conversation_id=conversation_id,
@@ -1159,38 +1092,24 @@ class LiveModelSTT(SpeechToTextEntity):
 
             publish_task = asyncio.create_task(publish_streaming_turn())
 
-            async def _cancel_sender_on_reply() -> None:
-                await gemini_replied.wait()
-                if not send_task.done():
-                    _LOGGER.warning(
-                        "[turn=%s] cancelling send task because the model started replying",
-                        turn_id,
-                    )
-                    send_task.cancel()
-
-            # With barge-in the microphone sender must live for the whole
-            # provider turn so the user can interrupt while the model speaks.
-            cancel_on_reply_task: asyncio.Task[None] | None = None
-            if not support_barge_in:
-                cancel_on_reply_task = asyncio.create_task(_cancel_sender_on_reply())
             try:
                 done: set[asyncio.Task[Any]] = set()
                 while not done:
-                    remaining = RESPONSE_INACTIVITY_TIMEOUT - (
+                    remaining = response_inactivity_timeout - (
                         time.monotonic() - last_response_activity
                     )
                     if remaining <= 0:
                         _LOGGER.warning(
                             "[turn=%s] cancelling receive task after %.1fs without response activity",
                             turn_id,
-                            RESPONSE_INACTIVITY_TIMEOUT,
+                            response_inactivity_timeout,
                         )
-                        session_unresponsive = True
                         receive_task.cancel()
                         try:
                             await receive_task
                         except asyncio.CancelledError:
                             pass
+                        session_manager.retire_session(conversation_id)
                         break
                     done, _pending = await asyncio.wait(
                         [send_task, receive_task],
@@ -1215,17 +1134,24 @@ class LiveModelSTT(SpeechToTextEntity):
 
                 if receive_task in done:
                     if not send_task.done():
-                        send_task.cancel()
-                        try:
+                        if support_barge_in:
+                            send_task.cancel()
+                            try:
+                                await send_task
+                            except asyncio.CancelledError:
+                                pass
+                        else:
+                            # Continue consuming until Core's external VAD
+                            # closes the generator and emits STT_VAD_END to the
+                            # remote satellite.
                             await send_task
-                        except asyncio.CancelledError:
-                            pass
                 elif not audio_sent:
                     receive_task.cancel()
                     try:
                         await receive_task
                     except asyncio.CancelledError:
                         pass
+                    session_manager.retire_session(conversation_id)
                     return SpeechResult(None, SpeechResultState.ERROR)
                 elif support_barge_in:
                     # The microphone stream ended: Home Assistant closed it at
@@ -1243,21 +1169,21 @@ class LiveModelSTT(SpeechToTextEntity):
                         pass
                 else:
                     while not receive_task.done():
-                        remaining = RESPONSE_INACTIVITY_TIMEOUT - (
+                        remaining = response_inactivity_timeout - (
                             time.monotonic() - last_response_activity
                         )
                         if remaining <= 0:
                             _LOGGER.warning(
                                 "[turn=%s] cancelling receive task after %.1fs without response activity",
                                 turn_id,
-                                RESPONSE_INACTIVITY_TIMEOUT,
+                                response_inactivity_timeout,
                             )
-                            session_unresponsive = True
                             receive_task.cancel()
                             try:
                                 await receive_task
                             except asyncio.CancelledError:
                                 pass
+                            session_manager.retire_session(conversation_id)
                             break
                         try:
                             await asyncio.wait_for(
@@ -1270,12 +1196,13 @@ class LiveModelSTT(SpeechToTextEntity):
                     await publish_task
                 else:
                     publish_task.cancel()
+                    # A provider turn that ends without playable audio must not
+                    # be reused. It may still deliver a late response or tool
+                    # call, which would otherwise leak into the next pipeline
+                    # run for this conversation.
+                    session_manager.retire_session(conversation_id)
             finally:
-                if cancel_on_reply_task is not None and not cancel_on_reply_task.done():
-                    cancel_on_reply_task.cancel()
                 tasks: list[asyncio.Task[Any]] = [send_task, receive_task]
-                if cancel_on_reply_task is not None:
-                    tasks.append(cancel_on_reply_task)
                 tasks.append(publish_task)
                 for task in tasks:
                     if not task.done():
@@ -1295,11 +1222,6 @@ class LiveModelSTT(SpeechToTextEntity):
                     audio_sent,
                     gemini_replied.is_set(),
                 )
-
-        # A timed-out turn must not leave an apparently open but unusable Live
-        # session attached to the next utterance of the same conversation.
-        if session_unresponsive:
-            await session_manager.async_close(conversation_id)
 
         response_text = "".join(text_response_parts)
         input_transcript = "".join(input_transcript_parts).strip()
@@ -1328,10 +1250,7 @@ class LiveModelSTT(SpeechToTextEntity):
             )
             return SpeechResult(None, SpeechResultState.ERROR)
 
-        if not transcribe_output and show_text and show_text_content is not None:
-            assistant_text = show_text_content
-        else:
-            assistant_text = response_text
+        assistant_text = response_text
 
         conversation_complete = not session_manager.should_continue_conversation(
             conversation_id
@@ -1341,9 +1260,7 @@ class LiveModelSTT(SpeechToTextEntity):
                 PipelineTurn(
                     conversation_id=conversation_id,
                     user_text=final_text,
-                    assistant_text=(
-                        assistant_text or fallback_user_text
-                    ),
+                    assistant_text=(assistant_text or fallback_user_text),
                     audio=b"",
                     complete_conversation=conversation_complete,
                 )
@@ -1368,7 +1285,6 @@ class LiveModelSTT(SpeechToTextEntity):
         custom_instruction: str,
         transcribe_output: bool,
         encourage_web_search: bool,
-        show_text: bool,
         support_barge_in: bool,
     ) -> SpeechResult:
         """Run the Live turn in the background so TTS can consume it immediately."""
@@ -1387,7 +1303,6 @@ class LiveModelSTT(SpeechToTextEntity):
                 custom_instruction,
                 transcribe_output,
                 encourage_web_search,
-                show_text,
                 support_barge_in,
                 result_future,
                 conversation_id,
@@ -1413,17 +1328,13 @@ class LiveModelSTT(SpeechToTextEntity):
                         url_placeholder = "spending_cap_url"
                         reason = "the monthly spending cap was exceeded"
                     elif user_message == _PREPAYMENT_CREDITS_USER_MESSAGE:
-                        issue_id = _prepayment_credits_issue_id(
-                            self.entry.entry_id
-                        )
+                        issue_id = _prepayment_credits_issue_id(self.entry.entry_id)
                         issue_url = _PREPAYMENT_CREDITS_URL
                         translation_key = "spending_cap_exceeded"
                         url_placeholder = "spending_cap_url"
                         reason = "prepayment credits are depleted"
                     else:
-                        issue_id = _openai_no_credits_issue_id(
-                            self.entry.entry_id
-                        )
+                        issue_id = _openai_no_credits_issue_id(self.entry.entry_id)
                         issue_url = _OPENAI_NO_CREDITS_URL
                         translation_key = "openai_no_credits"
                         url_placeholder = "billing_url"
@@ -1511,7 +1422,6 @@ class LiveModelSTT(SpeechToTextEntity):
     ) -> SpeechResult:
         """Send the audio stream directly to the configured live model."""
         turn_id = uuid4().hex[:8]
-        started_at = time.monotonic()
         config = {**self.entry.data, **self.entry.options}
         api_key = config.get(CONF_API_KEY)
         model = config.get(CONF_MODEL)
@@ -1520,24 +1430,22 @@ class LiveModelSTT(SpeechToTextEntity):
         user_requested_transcription = bool(
             config.get(self.transcribe_config_key, self.default_transcribe)
         )
-        support_barge_in = bool(
-            config.get(
-                CONF_SUPPORT_BARGE_IN,
-                DEFAULT_SUPPORT_BARGE_IN,
+        support_barge_in = self._effective_support_barge_in()
+        if self.supports_search_grounding:
+            encourage_web_search = bool(
+                config.get(
+                    CONF_SEARCH_GROUNDING,
+                    DEFAULT_SEARCH_GROUNDING,
+                )
             )
-        ) and supports_tts_interruption()
-        encourage_web_search = bool(
-            config.get(
-                CONF_ENCOURAGE_WEB_SEARCH,
-                DEFAULT_ENCOURAGE_WEB_SEARCH,
+        else:
+            encourage_web_search = bool(
+                config.get(
+                    CONF_ENCOURAGE_WEB_SEARCH,
+                    DEFAULT_ENCOURAGE_WEB_SEARCH,
+                )
             )
-        )
-        show_text = bool(
-            config.get(CONF_SHOW_TEXT, DEFAULT_SHOW_TEXT)
-        )
-        self._set_detailed_logging(
-            bool(config.get(CONF_DETAILED_LOGGING, False))
-        )
+        self._set_detailed_logging(bool(config.get(CONF_DETAILED_LOGGING, False)))
 
         _LOGGER.warning(
             "[turn=%s] STT start language=%s model=%s voice=%s detailed_logging=%s barge_in=%s",
@@ -1562,7 +1470,6 @@ class LiveModelSTT(SpeechToTextEntity):
             custom_instruction,
             user_requested_transcription,
             encourage_web_search,
-            show_text,
             support_barge_in,
         )
 

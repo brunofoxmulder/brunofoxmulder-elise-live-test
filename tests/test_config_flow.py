@@ -1,5 +1,6 @@
 """Tests for the config flow schema's barge-in and affective dialog settings."""
 
+from types import SimpleNamespace
 from typing import Any
 
 from homeassistant.const import CONF_LLM_HASS_API
@@ -13,16 +14,19 @@ from elise_live_test.const import (
     CONF_AFFECTIVE_DIALOG,
     CONF_API_KEY,
     CONF_MODEL,
+    CONF_RESPONSE_TIMEOUT,
     CONF_SEARCH_GROUNDING,
     CONF_SUPPORT_BARGE_IN,
     CONF_THINKING_LEVEL,
     CONF_VOICE,
     DEFAULT_AFFECTIVE_DIALOG,
+    DEFAULT_RESPONSE_TIMEOUT,
     DEFAULT_SEARCH_GROUNDING,
     DEFAULT_THINKING_LEVEL,
     DEFAULT_SUPPORT_BARGE_IN,
     PROVIDER_GEMINI,
     PROVIDER_OPENAI,
+    PROVIDER_PERSONAPLEX,
 )
 
 _VALID_VOICE = {PROVIDER_GEMINI: "Puck", PROVIDER_OPENAI: "marin"}
@@ -33,7 +37,7 @@ def _schema(provider: str, config: dict[str, Any] | None = None) -> vol.Schema:
     original = config_flow.llm.async_get_apis
     config_flow.llm.async_get_apis = lambda hass: []
     try:
-        return _provider_schema(None, provider, config)
+        return _provider_schema(provider, config, hass=SimpleNamespace())
     finally:
         config_flow.llm.async_get_apis = original
 
@@ -79,6 +83,131 @@ def test_search_grounding_is_a_gemini_preference() -> None:
     )
     assert result[CONF_SEARCH_GROUNDING] is DEFAULT_SEARCH_GROUNDING
     assert DEFAULT_SEARCH_GROUNDING is False
+
+
+def test_response_timeout_defaults_and_exposes_range() -> None:
+    schema = _schema(PROVIDER_GEMINI)
+    result = schema(
+        {
+            CONF_API_KEY: "key",
+            CONF_MODEL: "gemini-3.8-live",
+            CONF_VOICE: _VALID_VOICE[PROVIDER_GEMINI],
+        }
+    )
+
+    assert result[CONF_RESPONSE_TIMEOUT] == DEFAULT_RESPONSE_TIMEOUT
+    timeout_selector = _validator(schema, CONF_RESPONSE_TIMEOUT)
+    assert timeout_selector.config["min"] == 15
+    assert timeout_selector.config["max"] == 120
+
+
+def test_llm_api_selector_lists_registered_apis(monkeypatch) -> None:
+    """Offer every registered API, including third-party memory APIs."""
+    monkeypatch.setattr(
+        "elise_live_test.config_flow.llm.async_get_apis",
+        lambda _hass: [
+            SimpleNamespace(id="assist", name="Assist"),
+            SimpleNamespace(id="memory", name="Memory Management"),
+        ],
+    )
+
+    schema = _provider_schema(
+        PROVIDER_GEMINI,
+        {CONF_LLM_HASS_API: ["assist", "memory"]},
+        SimpleNamespace(),
+    )
+    api_selector = _validator(schema, CONF_LLM_HASS_API)
+
+    assert api_selector.config["multiple"] is True
+    assert api_selector.config["options"] == [
+        {"value": "assist", "label": "Assist"},
+        {"value": "memory", "label": "Memory Management"},
+    ]
+    marker = next(
+        marker for marker in schema.schema if marker.schema == CONF_LLM_HASS_API
+    )
+    assert marker.description["suggested_value"] == ["assist", "memory"]
+
+
+def test_llm_api_selector_defaults_to_assist_and_retains_missing_apis(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "elise_live_test.config_flow.llm.async_get_apis",
+        lambda _hass: [SimpleNamespace(id="assist", name="Assist")],
+    )
+
+    schema = _provider_schema(PROVIDER_OPENAI, hass=SimpleNamespace())
+    marker = next(
+        marker for marker in schema.schema if marker.schema == CONF_LLM_HASS_API
+    )
+    assert marker.description["suggested_value"] == ["assist"]
+    assert marker.default() == ["assist"]
+
+    result = schema(
+        {
+            CONF_API_KEY: "key",
+            CONF_MODEL: "gpt-realtime-2.1",
+            CONF_VOICE: _VALID_VOICE[PROVIDER_OPENAI],
+        }
+    )
+    assert result[CONF_LLM_HASS_API] == ["assist"]
+
+    schema = _provider_schema(
+        PROVIDER_GEMINI,
+        {CONF_LLM_HASS_API: ["removed-api"]},
+        SimpleNamespace(),
+    )
+    marker = next(
+        marker for marker in schema.schema if marker.schema == CONF_LLM_HASS_API
+    )
+    assert marker.description["suggested_value"] == ["removed-api"]
+    assert {option["value"] for option in _validator(schema, CONF_LLM_HASS_API).config["options"]} == {"assist", "removed-api"}
+
+
+def test_llm_api_selector_preserves_explicit_empty_selection(monkeypatch) -> None:
+    """Do not re-enable Assist after a user explicitly disables all APIs."""
+    monkeypatch.setattr(
+        "elise_live_test.config_flow.llm.async_get_apis",
+        lambda _hass: [SimpleNamespace(id="assist", name="Assist")],
+    )
+
+    schema = _provider_schema(
+        PROVIDER_GEMINI,
+        {CONF_LLM_HASS_API: []},
+        SimpleNamespace(),
+    )
+    result = schema(
+        {
+            CONF_API_KEY: "key",
+            CONF_MODEL: "gemini-3.8-live",
+            CONF_VOICE: _VALID_VOICE[PROVIDER_GEMINI],
+        }
+    )
+
+    assert result[CONF_LLM_HASS_API] == []
+
+
+def test_llm_api_selector_hidden_for_provider_without_tools(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "elise_live_test.config_flow.llm.async_get_apis",
+        lambda _hass: [SimpleNamespace(id="assist", name="Assist")],
+    )
+
+    keys = [
+        marker.schema
+        for marker in _provider_schema(
+            PROVIDER_PERSONAPLEX, hass=SimpleNamespace()
+        ).schema
+    ]
+    assert CONF_LLM_HASS_API not in keys
+
+
+def test_show_text_setting_is_removed() -> None:
+    """Do not expose the former integration-owned display callback setting."""
+    for provider in (PROVIDER_GEMINI, PROVIDER_OPENAI, PROVIDER_PERSONAPLEX):
+        keys = [marker.schema for marker in _provider_schema(provider).schema]
+        assert "show_text" not in keys
 
 
 def test_thinking_level_only_shown_for_extended_thinking() -> None:

@@ -39,6 +39,7 @@ from homeassistant.components.stt import (
     SpeechResult,
     SpeechResultState,
 )
+from homeassistant.const import CONF_LLM_HASS_API
 from homeassistant.core import Context
 from homeassistant.helpers.issue_registry import DATA_REGISTRY as DATA_ISSUE_REGISTRY
 
@@ -323,6 +324,25 @@ async def test_audio_processing_negotiates_external_vad(
 
 
 @pytest.mark.parametrize("entity_class", ENTITY_CLASSES)
+async def test_unsupported_barge_in_uses_external_vad(
+    entity_class,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("elise_live_test.stt.supports_tts_interruption", lambda: False)
+    entity, _session_manager, _turn_store = _make_entity(
+        FakeHass(),
+        {
+            "api_key": "k",
+            CONF_SUPPORT_BARGE_IN: True,
+        },
+        entity_class,
+    )
+
+    assert entity._effective_support_barge_in() is False
+    assert entity.audio_processing.requires_external_vad is True
+
+
+@pytest.mark.parametrize("entity_class", ENTITY_CLASSES)
 async def test_barge_in_keeps_microphone_forwarding_after_reply(
     entity_class,
 ) -> None:
@@ -348,7 +368,6 @@ async def test_barge_in_keeps_microphone_forwarding_after_reply(
             "v",
             "",
             True,
-            False,
             False,
             True,
             result_future,
@@ -400,7 +419,7 @@ async def test_barge_in_keeps_microphone_forwarding_after_reply(
 
 
 @pytest.mark.parametrize("entity_class", ENTITY_CLASSES)
-async def test_legacy_mode_stops_microphone_forwarding_after_reply(
+async def test_non_barge_in_keeps_forwarding_until_external_vad_closes_stream(
     entity_class,
 ) -> None:
     hass = FakeHass()
@@ -427,7 +446,6 @@ async def test_legacy_mode_stops_microphone_forwarding_after_reply(
             False,
             False,
             False,
-            False,
             result_future,
             "conversation-1",
             None,
@@ -441,15 +459,19 @@ async def test_legacy_mode_stops_microphone_forwarding_after_reply(
     baseline = len(session.sent_audio)
     assert baseline > 0
 
-    # Legacy behaviour: chunks arriving after the reply must not be forwarded.
+    # Home Assistant must keep consuming the microphone generator until its
+    # external VAD closes it. Otherwise remote satellites never receive the
+    # STT_VAD_END event that tells them to stop streaming.
     for _ in range(EXTRA_MIC_CHUNKS):
         mic.put(MIC_CHUNK)
-    await asyncio.sleep(0.1)
-    assert len(session.sent_audio) == baseline
+    await _wait_until(lambda: len(session.sent_audio) >= baseline + EXTRA_MIC_CHUNKS)
+    assert not result_future.done()
 
+    mic.close()
+    await _wait_until(lambda: session.end_audio_count == 1)
+    await asyncio.wait_for(result_future, 5)
     session.release_gate.set()
     result = await asyncio.wait_for(run_task, 15)
-    mic.close()
     assert result.result is SpeechResultState.SUCCESS
 
     turn = turn_store.take_voice_turn("conversation-1", result.text)
@@ -469,23 +491,25 @@ async def test_audio_tool_context_preserves_pipeline_provenance(
     hass = FakeHass()
     entity, _session_manager, _turn_store = _make_entity(
         hass,
-        {"api_key": "k"},
+        {
+            "api_key": "k",
+            CONF_LLM_HASS_API: ["assist", "memory"],
+        },
         entity_class,
     )
-    # Force Assist selection explicitly in this isolated provenance test.
-    # FakeHass has no real Core LLM registry; async_load_tools is patched below,
-    # so this test remains focused on forwarding the pipeline Context.
-    entity.entry.data["llm_hass_api"] = ["assist"]
+    # The fake API merger records the selected APIs and the voice Context.
     session = ScriptedSession(support_barge_in=False)
     _bind_client(entity, ScriptedClient(session))
     source_context = Context(user_id="voice-user", parent_id="parent-context")
     captured_contexts = []
+    captured_api_ids = []
 
-    async def fake_async_load_tools(hass, config, llm_context):
-        captured_contexts.append(llm_context.context)
+    async def fake_async_get_api(**kwargs):
+        captured_contexts.append(kwargs["llm_context"].context)
+        captured_api_ids.append(kwargs["api_id"])
         return SimpleNamespace(tools=[], api_prompt="", custom_serializer=None)
 
-    monkeypatch.setattr("elise_live_test.stt.async_load_tools", fake_async_load_tools)
+    monkeypatch.setattr("elise_live_test.stt.llm.async_get_api", fake_async_get_api)
 
     mic = MicStream()
     result_future = asyncio.Future()
@@ -500,7 +524,6 @@ async def test_audio_tool_context_preserves_pipeline_provenance(
             False,
             False,
             False,
-            False,
             result_future,
             "conversation-1",
             "device-1",
@@ -510,11 +533,12 @@ async def test_audio_tool_context_preserves_pipeline_provenance(
 
     mic.put(MIC_CHUNK)
     await asyncio.wait_for(session.reply_started.wait(), 5)
+    mic.close()
     session.release_gate.set()
     await asyncio.wait_for(run_task, 15)
-    mic.close()
 
     assert captured_contexts == [source_context]
+    assert captured_api_ids == [["assist", "memory"]]
 
 
 async def test_audio_entry_point_forwards_resolved_pipeline_context(
@@ -541,7 +565,7 @@ async def test_audio_entry_point_forwards_resolved_pipeline_context(
     async def fake_run(*args):
         captured_contexts.append(args[-1])
         result = SpeechResult("user request", SpeechResultState.SUCCESS)
-        args[10].set_result(result)
+        args[9].set_result(result)
         return result
 
     monkeypatch.setattr(entity, "_async_run_audio_stream_sdk", fake_run)
@@ -553,7 +577,6 @@ async def test_audio_entry_point_forwards_resolved_pipeline_context(
         "m",
         "v",
         "",
-        False,
         False,
         False,
         False,
@@ -652,7 +675,6 @@ async def test_placeholder_transcript_carries_unique_turn_id(
             "v",
             "",
             True,
-            False,
             False,
             True,
             result_future,

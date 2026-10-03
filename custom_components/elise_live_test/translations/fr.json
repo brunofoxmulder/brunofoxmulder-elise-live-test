@@ -21,16 +21,16 @@
           "transcribe_gemini": "Transcrire Gemini",
           "transcribe_gpt": "Transcrire OpenAI",
           "encourage_web_search": "Encourager la recherche Internet",
-          "show_text": "Afficher le texte",
-          "llm_hass_api": "Outils Home Assistant",
+          "llm_hass_api": "API LLM Home Assistant",
           "search_grounding": "Recherche Google native",
           "thinking_level": "Niveau de réflexion",
           "support_barge_in": "Autoriser l’interruption vocale",
-          "affective_dialog": "Dialogue affectif"
+          "affective_dialog": "Dialogue affectif",
+          "response_timeout": "Délai d’inactivité de la réponse"
         },
         "data_description": {
           "api_key": "Les données vocales, textes et résultats des outils sont transmis au fournisseur choisi.",
-          "llm_hass_api": "Sélectionner Assist et les groupes souhaités. Tools for Assist fournit Search Services et Weather Forecast. Une sélection vide désactive les outils Home Assistant.",
+          "llm_hass_api": "Choisir les API LLM dont Élise peut utiliser les outils. Assist donne accès aux appareils ; ajouter une API de mémoire si elle est installée. Une sélection vide désactive ces outils.",
           "encourage_web_search": "Encourage un outil de recherche déjà sélectionné ; ne donne pas accès à Internet à lui seul.",
           "detailed_logging": "Peut enregistrer les transcriptions et les appels d’outils. À activer seulement pour diagnostiquer.",
           "model": "Modèle utilisé par le fournisseur sélectionné.",
@@ -40,9 +40,9 @@
           "transcribe_gpt": "Afficher la transcription des réponses OpenAI.",
           "search_grounding": "Active la recherche Google native du modèle. Laisser désactivé pour utiliser les outils de recherche HA/MCP comme SearXNG.",
           "thinking_level": "Définit le niveau de réflexion du modèle lorsque cette option est prise en charge.",
-          "show_text": "Afficher également le texte de la réponse.",
           "support_barge_in": "Permet d’interrompre la réponse vocale lorsque le fournisseur et Home Assistant le prennent en charge.",
-          "affective_dialog": "Active le dialogue affectif lorsque le modèle le prend en charge."
+          "affective_dialog": "Active le dialogue affectif lorsque le modèle le prend en charge.",
+          "response_timeout": "Durée sans réponse du fournisseur avant de fermer la session Live. Augmenter pour les modèles lents ou les appels d’outils prolongés. Ne modifie pas le délai d’écoute VAD de Home Assistant."
         }
       },
       "reconfigure": {
@@ -57,23 +57,24 @@
           "transcribe_gemini": "Transcrire Gemini",
           "transcribe_gpt": "Transcrire OpenAI",
           "encourage_web_search": "Encourager la recherche Internet",
-          "show_text": "Afficher le texte",
-          "llm_hass_api": "Outils Home Assistant",
+          "llm_hass_api": "API LLM Home Assistant",
           "search_grounding": "Recherche Google native",
           "thinking_level": "Niveau de réflexion",
           "support_barge_in": "Autoriser l’interruption vocale",
-          "affective_dialog": "Dialogue affectif"
+          "affective_dialog": "Dialogue affectif",
+          "response_timeout": "Délai d’inactivité de la réponse"
         },
         "data_description": {
           "api_key": "Les données vocales, textes et résultats des outils sont transmis au fournisseur choisi.",
-          "llm_hass_api": "Sélectionner Assist et les groupes souhaités. Tools for Assist fournit Search Services et Weather Forecast. Une sélection vide désactive les outils Home Assistant.",
+          "llm_hass_api": "Choisir les API LLM dont Élise peut utiliser les outils. Assist donne accès aux appareils ; ajouter une API de mémoire si elle est installée. Une sélection vide désactive ces outils.",
           "encourage_web_search": "Encourage un outil de recherche déjà sélectionné ; ne donne pas accès à Internet à lui seul.",
           "detailed_logging": "Peut enregistrer les transcriptions et les appels d’outils. À activer seulement pour diagnostiquer.",
           "model": "Modèle utilisé par le fournisseur sélectionné.",
           "search_grounding": "Active la recherche Google native du modèle. Laisser désactivé pour utiliser les outils de recherche HA/MCP comme SearXNG.",
           "thinking_level": "Définit le niveau de réflexion du modèle lorsque cette option est prise en charge.",
           "support_barge_in": "Permet d’interrompre la réponse vocale lorsque le fournisseur et Home Assistant le prennent en charge.",
-          "affective_dialog": "Active le dialogue affectif lorsque le modèle le prend en charge."
+          "affective_dialog": "Active le dialogue affectif lorsque le modèle le prend en charge.",
+          "response_timeout": "Durée sans réponse du fournisseur avant de fermer la session Live. Augmenter pour les modèles lents ou les appels d’outils prolongés. Ne modifie pas le délai d’écoute VAD de Home Assistant."
         }
       }
     },
@@ -95,23 +96,24 @@
           "transcribe_gemini": "Transcrire Gemini",
           "transcribe_gpt": "Transcrire OpenAI",
           "encourage_web_search": "Encourager la recherche Internet",
-          "show_text": "Afficher le texte",
-          "llm_hass_api": "Outils Home Assistant",
+          "llm_hass_api": "API LLM Home Assistant",
           "search_grounding": "Recherche Google native",
           "thinking_level": "Niveau de réflexion",
           "support_barge_in": "Autoriser l’interruption vocale",
-          "affective_dialog": "Dialogue affectif"
+          "affective_dialog": "Dialogue affectif",
+          "response_timeout": "Délai d’inactivité de la réponse"
         },
         "data_description": {
           "api_key": "Les données vocales, textes et résultats des outils sont transmis au fournisseur choisi.",
-          "llm_hass_api": "Sélectionner Assist et les groupes souhaités. Tools for Assist fournit Search Services et Weather Forecast. Une sélection vide désactive les outils Home Assistant.",
+          "llm_hass_api": "Choisir les API LLM dont Élise peut utiliser les outils. Assist donne accès aux appareils ; ajouter une API de mémoire si elle est installée. Une sélection vide désactive ces outils.",
           "encourage_web_search": "Encourage un outil de recherche déjà sélectionné ; ne donne pas accès à Internet à lui seul.",
           "detailed_logging": "Peut enregistrer les transcriptions et les appels d’outils. À activer seulement pour diagnostiquer.",
           "model": "Modèle utilisé par le fournisseur sélectionné.",
           "search_grounding": "Active la recherche Google native du modèle. Laisser désactivé pour utiliser les outils de recherche HA/MCP comme SearXNG.",
           "thinking_level": "Définit le niveau de réflexion du modèle lorsque cette option est prise en charge.",
           "support_barge_in": "Permet d’interrompre la réponse vocale lorsque le fournisseur et Home Assistant le prennent en charge.",
-          "affective_dialog": "Active le dialogue affectif lorsque le modèle le prend en charge."
+          "affective_dialog": "Active le dialogue affectif lorsque le modèle le prend en charge.",
+          "response_timeout": "Durée sans réponse du fournisseur avant de fermer la session Live. Augmenter pour les modèles lents ou les appels d’outils prolongés. Ne modifie pas le délai d’écoute VAD de Home Assistant."
         }
       }
     }
