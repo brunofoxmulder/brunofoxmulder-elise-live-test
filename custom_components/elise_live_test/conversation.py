@@ -71,6 +71,19 @@ from .utils import pcm_to_wav, resample_24k_to_16k
 
 _LOGGER = logging.getLogger(__name__)
 
+_CALENDAR_TOOL_INSTRUCTION = (
+    "When the user asks about calendar events, appointments, meetings, or what is "
+    "scheduled on a date, you MUST call the relevant Home Assistant calendar tool "
+    "and base your answer on its returned events. This includes relative dates such "
+    "as today, tomorrow, or next week, specific dates, and French requests such as "
+    "\"rendez-vous\", \"agenda\", or \"calendrier\". Never say that calendar "
+    "access is unavailable, and never guess whether an event exists, before trying "
+    "the calendar tool. If no calendar tool is provided, clearly say that it is not "
+    "exposed to this assistant."
+)
+
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -204,6 +217,7 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                 native_search_grounding=self.supports_search_grounding,
             )
             system_instruction = _add_end_conversation_instruction(system_instruction)
+            system_instruction = f"{system_instruction}\\n\\n{_CALENDAR_TOOL_INSTRUCTION}"
             if not transcribe_output and show_text:
                 system_instruction = _add_show_text_instruction(system_instruction)
 
