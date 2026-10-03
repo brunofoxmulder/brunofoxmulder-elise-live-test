@@ -273,6 +273,17 @@ def _add_end_conversation_instruction(system_instruction: str) -> str:
     return f"{system_instruction}\n\n{_END_CONVERSATION_INSTRUCTION}"
 
 
+def _add_action_confirmation_instruction(system_instruction: str) -> str:
+    """Ground spoken action confirmations in the current tool response."""
+    return (
+        f"{system_instruction}\n\n"
+        "When confirming a Home Assistant on/off action, use only the exact "
+        "entity names in spoken_confirmation_targets from the current tool "
+        "response. Never name a room or device from a previous turn instead. "
+        "If no successful target is reported, do not claim the action succeeded."
+    )
+
+
 def _add_search_tool_instruction(
     system_instruction: str,
     tools: list[llm.Tool],
@@ -297,6 +308,40 @@ def _validate_tool_results(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: _validate_tool_results(item) for key, item in value.items()}
     return value
+
+
+def _annotate_home_action_result(tool_name: str, result: Any) -> Any:
+    """Give the live model the exact targets confirmed by an Assist action."""
+    if tool_name.rsplit("__", 1)[-1] not in ("HassTurnOn", "HassTurnOff"):
+        return result
+    if not isinstance(result, dict) or result.get("response_type") != "action_done":
+        return result
+    data = result.get("data")
+    if not isinstance(data, dict) or data.get("failed"):
+        return result
+    successes = data.get("success")
+    if not isinstance(successes, list):
+        return result
+    names = list(
+        dict.fromkeys(
+            target["name"]
+            for target in successes
+            if isinstance(target, dict)
+            and target.get("type") == "entity"
+            and isinstance(target.get("name"), str)
+            and target["name"]
+        )
+    )
+    if not names:
+        return result
+    return {
+        **result,
+        "spoken_confirmation_targets": names,
+        "spoken_confirmation_rule": (
+            "Confirm only these successful entity names for this action. "
+            "Do not substitute an entity or room from an earlier turn."
+        ),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -545,6 +590,7 @@ class LiveModelSTT(SpeechToTextEntity):
                 native_search_grounding=True,
             )
         system_instruction = _add_end_conversation_instruction(system_instruction)
+        system_instruction = _add_action_confirmation_instruction(system_instruction)
 
         live_tools = _add_end_conversation_tool(
             _format_tools_for_live(
@@ -866,6 +912,9 @@ class LiveModelSTT(SpeechToTextEntity):
                                 else:
                                     tool_result = {"error": "HA LLM API not available"}
                                 tool_result = _validate_tool_results(tool_result)
+                                tool_result = _annotate_home_action_result(
+                                    tool_name, tool_result
+                                )
 
                                 _LOGGER.debug(
                                     "[turn=%s] LLM tool response name=%s id=%s response=%r",

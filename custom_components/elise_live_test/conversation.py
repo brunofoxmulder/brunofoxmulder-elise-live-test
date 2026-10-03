@@ -52,12 +52,14 @@ from .const import (
 )
 from .stt import (
     END_CONVERSATION_TOOL_NAME,
+    _add_action_confirmation_instruction,
     _add_end_conversation_instruction,
     _add_end_conversation_tool,
     _add_search_tool_instruction,
     _format_tools_for_live,
     _is_connection_closed_ok,
     _validate_tool_results,
+    _annotate_home_action_result,
 )
 from .openai import OpenAIRealtimeClient
 from .runtime import AudioStream, new_conversation_id
@@ -181,6 +183,7 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                 native_search_grounding=self.supports_search_grounding,
             )
             system_instruction = _add_end_conversation_instruction(system_instruction)
+            system_instruction = _add_action_confirmation_instruction(system_instruction)
             return None, live_tools, system_instruction
 
         try:
@@ -203,6 +206,7 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                 native_search_grounding=self.supports_search_grounding,
             )
             system_instruction = _add_end_conversation_instruction(system_instruction)
+            system_instruction = _add_action_confirmation_instruction(system_instruction)
 
             live_tools = _add_end_conversation_tool(
                 _format_tools_for_live(
@@ -232,6 +236,7 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                 native_search_grounding=self.supports_search_grounding,
             )
             system_instruction = _add_end_conversation_instruction(system_instruction)
+            system_instruction = _add_action_confirmation_instruction(system_instruction)
             live_tools = add_history_tool(live_tools)
             return (
                 None,
@@ -362,6 +367,9 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                                 else:
                                     tool_result = {"error": "HA LLM API not available"}
                                 tool_result = _validate_tool_results(tool_result)
+                                tool_result = _annotate_home_action_result(
+                                    tool_name, tool_result
+                                )
 
                                 _LOGGER.debug(
                                     "[turn=%s] LLM tool response name=%s id=%s response=%r",
