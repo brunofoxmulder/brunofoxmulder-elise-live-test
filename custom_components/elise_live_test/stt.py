@@ -699,6 +699,7 @@ class LiveModelSTT(SpeechToTextEntity):
             turn_id,
             conversation_id,
         )
+        session_unresponsive = False
         async with session_manager.acquire(
             conversation_id,
             client,
@@ -1184,6 +1185,7 @@ class LiveModelSTT(SpeechToTextEntity):
                             turn_id,
                             RESPONSE_INACTIVITY_TIMEOUT,
                         )
+                        session_unresponsive = True
                         receive_task.cancel()
                         try:
                             await receive_task
@@ -1250,6 +1252,7 @@ class LiveModelSTT(SpeechToTextEntity):
                                 turn_id,
                                 RESPONSE_INACTIVITY_TIMEOUT,
                             )
+                            session_unresponsive = True
                             receive_task.cancel()
                             try:
                                 await receive_task
@@ -1292,6 +1295,11 @@ class LiveModelSTT(SpeechToTextEntity):
                     audio_sent,
                     gemini_replied.is_set(),
                 )
+
+        # A timed-out turn must not leave an apparently open but unusable Live
+        # session attached to the next utterance of the same conversation.
+        if session_unresponsive:
+            await session_manager.async_close(conversation_id)
 
         response_text = "".join(text_response_parts)
         input_transcript = "".join(input_transcript_parts).strip()
