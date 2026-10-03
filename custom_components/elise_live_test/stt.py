@@ -1031,6 +1031,25 @@ class LiveModelSTT(SpeechToTextEntity):
                                 transcription[:200],
                             )
 
+                        if (
+                            response.generation_complete
+                            and first_audio.is_set()
+                            and not response.tool_calls
+                            and not replacement_response_pending
+                        ):
+                            # Output audio is complete even if the provider's
+                            # turnComplete event is delayed or never arrives.
+                            await response_audio_stream.add_chunk(
+                                response_audio_resampler.flush()
+                            )
+                            response_audio_stream.finish()
+                            if response_text_stream is not None:
+                                response_text_stream.finish()
+                            _LOGGER.warning(
+                                "[turn=%s] generationComplete; closed audio stream",
+                                turn_id,
+                            )
+
                         if response.turn_complete:
                             if support_barge_in and replacement_response_pending:
                                 # This completes the interrupted assistant
