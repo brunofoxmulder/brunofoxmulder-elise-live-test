@@ -217,7 +217,7 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                 native_search_grounding=self.supports_search_grounding,
             )
             system_instruction = _add_end_conversation_instruction(system_instruction)
-            system_instruction = f"{system_instruction}\\n\\n{_CALENDAR_TOOL_INSTRUCTION}"
+            system_instruction = f"{system_instruction}\n\n{_CALENDAR_TOOL_INSTRUCTION}"
             if not transcribe_output and show_text:
                 system_instruction = _add_show_text_instruction(system_instruction)
 
