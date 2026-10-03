@@ -9,7 +9,7 @@ from elise_live_test.gemini import (
     _gemini_config,
     async_create_gemini_client,
 )
-from elise_live_test.live import LiveConfig, LiveEvent, LiveTool
+from elise_live_test.live import LiveConfig, LiveEvent, LiveTool, LiveToolResponse
 
 
 def _make_config(**overrides) -> LiveConfig:
@@ -84,6 +84,42 @@ class _FakeSDKClient:
 
 async def _collect(session: GeminiLiveSession) -> list[LiveEvent]:
     return [event async for event in session.receive()]
+
+
+async def test_gemini_tool_responses_wrap_text_as_json(monkeypatch):
+    class _FakeSDKSession:
+        def __init__(self):
+            self.tool_responses = None
+
+        async def send_tool_response(self, *, function_responses):
+            self.tool_responses = function_responses
+
+    class _FakeGenaiModule:
+        types = SimpleNamespace(
+            FunctionResponse=lambda **kwargs: SimpleNamespace(**kwargs)
+        )
+
+    monkeypatch.setitem(
+        sys.modules, "google", SimpleNamespace(genai=_FakeGenaiModule)
+    )
+    monkeypatch.setitem(sys.modules, "google.genai", _FakeGenaiModule)
+
+    sdk_session = _FakeSDKSession()
+    session = GeminiLiveSession(sdk_session)
+
+    await session.send_tool_responses(
+        [
+            LiveToolResponse(
+                "weather_forecast", "weather-1", "Aujourd'hui : 14 °C"
+            ),
+            LiveToolResponse("calendar_events", "calendar-1", {"events": []}),
+        ]
+    )
+
+    assert [response.response for response in sdk_session.tool_responses] == [
+        {"result": "Aujourd'hui : 14 °C"},
+        {"events": []},
+    ]
 
 
 def test_gemini_config_legacy_keeps_existing_realtime_input_config():
