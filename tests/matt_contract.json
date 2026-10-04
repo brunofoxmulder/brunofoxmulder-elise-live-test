@@ -5,37 +5,37 @@
     {
       "id": "runtime.py",
       "file": "runtime.py",
-      "sha256": "86dfa4be1528e1513cd7cbc78e40f9ba0ed80b610ed4cfa94bef30a449f7b28d"
+      "sha256": "c1ee14ff486099eceaa5e7b8dcd416da25a6ba266055b7203346d8696c6e0182"
     },
     {
       "id": "live.py",
       "file": "live.py",
-      "sha256": "ea985f78d2600c923a1387a717a64c58f0841b559d58ab2ebeca4fa3e869dbd7"
+      "sha256": "0cc4fef2fcf033e3d71c73c55fbc68a6b3962cdcc033f09ec80f962a8086ef08"
     },
     {
       "id": "tts.py",
       "file": "tts.py",
-      "sha256": "99c885cdf84768dd1f24644523e633ff5f85ec24355b01d5890ec9138d6de979"
+      "sha256": "07c37328d6a9bec03c43b93a6bd12057ec4824719768be0b245b9540c216140a"
     },
     {
       "id": "openai.py",
       "file": "openai.py",
-      "sha256": "96d34499521b73f14c4107a18644e1e229651785e7634031eeeb0e94451a713d"
+      "sha256": "d37b9e35f4f870e55aee65b3e89b8629873eb53f0bdb69084c2091856afac89c"
     },
     {
       "id": "utils.py",
       "file": "utils.py",
-      "sha256": "efd010918e4967866593ca187368641d004f458509958b22f64240677e2cb0f3"
+      "sha256": "a90f9f5e801ee7b960bc663c70c88d352ec2ad1942b8c47b7e1365786c41f21e"
     },
     {
       "id": "compat.py",
       "file": "compat.py",
-      "sha256": "4a52295078ca93d9542eba0dda0c91f87c4ac79cd5d82c04001eab96ecb0f0e0"
+      "sha256": "889eed7e2170afb08e58406f965c26aed7fb073b368f408ad4c17ccfd370bd6f"
     },
     {
       "id": "__init__.py",
       "file": "__init__.py",
-      "sha256": "40c7816620dc00eca236eef0b3b4871d52ab37ed735b5b04319e1dbf5639948c"
+      "sha256": "a3135024a2039ae23fab72fb431c83e7ce46fb7d0d8c016488d9fd5528bc452b"
     },
     {
       "id": "conversation.py:_async_handle_message",

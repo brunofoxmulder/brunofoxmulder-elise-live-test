@@ -23,7 +23,7 @@ def test_transport_matches_pinned_matt(contract):
         # Source segments are stable across Python AST schema revisions.
         canonical = ast.get_source_segment(source, node)
     else:
-        canonical = source.replace('"elise_live_test"', '"gemini_live"')
+        canonical = source.replace('"elise_live_test"', '"gemini_live"').rstrip() + "\n"
     digest = hashlib.sha256(canonical.encode()).hexdigest()
     assert digest == contract["sha256"], (
         f"Transport diverged from Matt {CONTRACT['commit']}: {contract['id']}. "
