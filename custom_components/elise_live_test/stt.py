@@ -41,6 +41,7 @@ from .history_tool import (
     add_history_tool,
     async_handle_history_tool,
 )
+from .tools import selected_api_ids
 from .live import LiveConfig, LiveTool, LiveToolResponse
 from .const import (
     CONF_API_KEY,
@@ -273,17 +274,6 @@ def _add_end_conversation_instruction(system_instruction: str) -> str:
     return f"{system_instruction}\n\n{_END_CONVERSATION_INSTRUCTION}"
 
 
-def _add_action_confirmation_instruction(system_instruction: str) -> str:
-    """Ground spoken action confirmations in the current tool response."""
-    return (
-        f"{system_instruction}\n\n"
-        "When confirming a Home Assistant on/off action, use only the exact "
-        "entity names in spoken_confirmation_targets from the current tool "
-        "response. Never name a room or device from a previous turn instead. "
-        "If no successful target is reported, do not claim the action succeeded."
-    )
-
-
 def _add_search_tool_instruction(
     system_instruction: str,
     tools: list[llm.Tool],
@@ -308,40 +298,6 @@ def _validate_tool_results(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: _validate_tool_results(item) for key, item in value.items()}
     return value
-
-
-def _annotate_home_action_result(tool_name: str, result: Any) -> Any:
-    """Give the live model the exact targets confirmed by an Assist action."""
-    if tool_name.rsplit("__", 1)[-1] not in ("HassTurnOn", "HassTurnOff"):
-        return result
-    if not isinstance(result, dict) or result.get("response_type") != "action_done":
-        return result
-    data = result.get("data")
-    if not isinstance(data, dict) or data.get("failed"):
-        return result
-    successes = data.get("success")
-    if not isinstance(successes, list):
-        return result
-    names = list(
-        dict.fromkeys(
-            target["name"]
-            for target in successes
-            if isinstance(target, dict)
-            and target.get("type") == "entity"
-            and isinstance(target.get("name"), str)
-            and target["name"]
-        )
-    )
-    if not names:
-        return result
-    return {
-        **result,
-        "spoken_confirmation_targets": names,
-        "spoken_confirmation_rule": (
-            "Confirm only these successful entity names for this action. "
-            "Do not substitute an entity or room from an earlier turn."
-        ),
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -489,7 +445,6 @@ class LiveModelSTT(SpeechToTextEntity):
         pipeline_context: Context | None = None,
     ) -> SpeechResult:
         """Process audio using the configured live-model client."""
-        config = {**self.entry.data, **self.entry.options}
         turn_id = uuid4().hex[:8]
         started_at = time.monotonic()
         entry_data = self.hass.data[self.integration_domain][self.entry.entry_id]
@@ -531,7 +486,7 @@ class LiveModelSTT(SpeechToTextEntity):
         response_inactivity_timeout = float(
             config.get(CONF_RESPONSE_TIMEOUT, DEFAULT_RESPONSE_TIMEOUT)
         )
-        api_ids = config.get(CONF_LLM_HASS_API, [llm.LLM_API_ASSIST])
+        api_ids = selected_api_ids(config)
 
         if api_ids:
             try:
@@ -581,22 +536,16 @@ class LiveModelSTT(SpeechToTextEntity):
             system_instruction = _add_search_tool_instruction(
                 system_instruction,
                 [],
-                bool(
-                    config.get(
-                        CONF_SEARCH_GROUNDING,
-                        DEFAULT_SEARCH_GROUNDING,
-                    )
-                ),
+                encourage_web_search,
                 native_search_grounding=True,
             )
         system_instruction = _add_end_conversation_instruction(system_instruction)
-        system_instruction = _add_action_confirmation_instruction(system_instruction)
 
         live_tools = _add_end_conversation_tool(
             _format_tools_for_live(
                 ha_tools,
                 llm_api.custom_serializer,
-                encourage_web_search,
+                encourage_web_search and not self.supports_search_grounding,
             )
             if llm_api
             else []
@@ -912,9 +861,6 @@ class LiveModelSTT(SpeechToTextEntity):
                                 else:
                                     tool_result = {"error": "HA LLM API not available"}
                                 tool_result = _validate_tool_results(tool_result)
-                                tool_result = _annotate_home_action_result(
-                                    tool_name, tool_result
-                                )
 
                                 _LOGGER.debug(
                                     "[turn=%s] LLM tool response name=%s id=%s response=%r",
@@ -1008,25 +954,6 @@ class LiveModelSTT(SpeechToTextEntity):
                                 turn_id,
                                 len(transcription),
                                 transcription[:200],
-                            )
-
-                        if (
-                            response.generation_complete
-                            and first_audio.is_set()
-                            and not response.tool_calls
-                            and not replacement_response_pending
-                        ):
-                            # Output audio is complete even if the provider's
-                            # turnComplete event is delayed or never arrives.
-                            await response_audio_stream.add_chunk(
-                                response_audio_resampler.flush()
-                            )
-                            response_audio_stream.finish()
-                            if response_text_stream is not None:
-                                response_text_stream.finish()
-                            _LOGGER.warning(
-                                "[turn=%s] generationComplete; closed audio stream",
-                                turn_id,
                             )
 
                         if response.turn_complete:
@@ -1564,3 +1491,4 @@ class GPTRealtimeSTT(LiveModelSTT):
     def _api_error_message(exc: BaseException) -> str | None:
         """Return OpenAI billing errors that the user can resolve."""
         return _user_visible_api_error(exc)
+

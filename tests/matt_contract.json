@@ -1,0 +1,80 @@
+{
+  "repository": "matt123p/ha-gemini-live",
+  "commit": "d4ad0e523eca92f1c395e82da14d6da0fafd71be",
+  "contracts": [
+    {
+      "id": "runtime.py",
+      "file": "runtime.py",
+      "sha256": "c1ee14ff486099eceaa5e7b8dcd416da25a6ba266055b7203346d8696c6e0182"
+    },
+    {
+      "id": "live.py",
+      "file": "live.py",
+      "sha256": "0cc4fef2fcf033e3d71c73c55fbc68a6b3962cdcc033f09ec80f962a8086ef08"
+    },
+    {
+      "id": "tts.py",
+      "file": "tts.py",
+      "sha256": "07c37328d6a9bec03c43b93a6bd12057ec4824719768be0b245b9540c216140a"
+    },
+    {
+      "id": "openai.py",
+      "file": "openai.py",
+      "sha256": "d37b9e35f4f870e55aee65b3e89b8629873eb53f0bdb69084c2091856afac89c"
+    },
+    {
+      "id": "utils.py",
+      "file": "utils.py",
+      "sha256": "a90f9f5e801ee7b960bc663c70c88d352ec2ad1942b8c47b7e1365786c41f21e"
+    },
+    {
+      "id": "compat.py",
+      "file": "compat.py",
+      "sha256": "889eed7e2170afb08e58406f965c26aed7fb073b368f408ad4c17ccfd370bd6f"
+    },
+    {
+      "id": "__init__.py",
+      "file": "__init__.py",
+      "sha256": "a3135024a2039ae23fab72fb431c83e7ce46fb7d0d8c016488d9fd5528bc452b"
+    },
+    {
+      "id": "conversation.py:_async_handle_message",
+      "file": "conversation.py",
+      "method": "_async_handle_message",
+      "sha256": "c72a55b0dbe56abc1c1aa6de34a5fbcbdcd6a00ee03af58e318c3d9fa4e10dec"
+    },
+    {
+      "id": "gemini.py:receive",
+      "file": "gemini.py",
+      "method": "receive",
+      "sha256": "187e2dc43f250d23ac75466ea23088f1caf9c41ec35b215080a7f34d89f71e18"
+    },
+    {
+      "id": "gemini.py:_gemini_config",
+      "file": "gemini.py",
+      "method": "_gemini_config",
+      "sha256": "e48caf46d2194a775a628df1b3b2eb3757c43f9c732c62ff02d382866e6d3f45"
+    },
+    {
+      "id": "stt.py:_async_process_audio_stream_sdk",
+      "file": "stt.py",
+      "method": "_async_process_audio_stream_sdk",
+      "sha256": "31e7bf6714e007ed0fc67c4372223185d5c3660af01bec47bad75f08417aa489"
+    },
+    {
+      "id": "stt.py:async_process_audio_stream",
+      "file": "stt.py",
+      "method": "async_process_audio_stream",
+      "sha256": "53f38969f3feeba9d0f57305caca1e5c559ebec8b4f7713832fbbbdc1182da2b"
+    }
+  ],
+  "requirements": [
+    "google-genai>=2.25.0",
+    "msgpack==1.1.2"
+  ],
+  "upstream_requirements": [
+    "google-genai==2.21.0",
+    "msgpack==1.1.2"
+  ],
+  "validated_google_genai": "2.25.0"
+}

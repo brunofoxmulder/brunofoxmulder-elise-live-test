@@ -25,7 +25,6 @@ def _server_content(**overrides):
         "input_transcription": None,
         "interrupted": False,
         "turn_complete": False,
-        "generation_complete": False,
         "interaction_status": None,
     }
     defaults.update(overrides)
@@ -283,42 +282,6 @@ async def test_gemini_plain_turn_complete_remains_terminal_marker():
     assert events == [LiveEvent(turn_complete=True)]
 
 
-async def test_gemini_generation_complete_finishes_audio_before_turn_complete():
-    session = GeminiLiveSession(
-        _FakeSDKSession([_sdk_response(_server_content(generation_complete=True))])
-    )
-
-    events = await _collect(session)
-
-    assert events == [LiveEvent(generation_complete=True)]
-
-
-async def test_extended_thinking_ignores_intermediate_generation_complete():
-    session = GeminiLiveSession(
-        _FakeSDKSession(
-            [
-                _sdk_response(
-                    _server_content(
-                        generation_complete=True,
-                        interaction_status="IN_PROGRESS",
-                    )
-                ),
-                _sdk_response(
-                    _server_content(
-                        generation_complete=True,
-                        interaction_status="IDLE",
-                    )
-                ),
-            ]
-        ),
-        extended_thinking=True,
-    )
-
-    events = await _collect(session)
-
-    assert events == [LiveEvent(generation_complete=True)]
-
-
 async def test_extended_thinking_waits_until_interaction_is_idle():
     sdk_session = _TurnBoundedFakeSDKSession(
         [
@@ -436,3 +399,4 @@ async def test_gemini_legacy_does_not_reenter_sdk_receive():
 
     assert events == [LiveEvent(interrupted=True, turn_complete=True)]
     assert sdk_session.receive_count == 1
+

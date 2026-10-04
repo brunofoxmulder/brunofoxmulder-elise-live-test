@@ -1,3 +1,10 @@
+# Matt baseline with tools — candidate
+
+This candidate restores Matt 1.0.9 (`d4ad0e5`) for the voice transport and adds
+Home Assistant tool selection, GetHistory and compatible tool-result envelopes.
+See [MATT_BASELINE.md](MATT_BASELINE.md) for exact differences, validation and
+known upstream risks. It is not yet validated on Home Assistant Voice Preview.
+
 # Élise Live Test for Home Assistant
 
 [![HACS validation](https://img.shields.io/github/actions/workflow/status/brunofoxmulder/brunofoxmulder-elise-live-test/validate.yml?branch=main&label=HACS%20validation)](https://github.com/brunofoxmulder/brunofoxmulder-elise-live-test/actions/workflows/validate.yml)
@@ -370,3 +377,4 @@ The generator uses only the Python standard library.
 ## License
 
 Gemini Live for Home Assistant is available under the [MIT License](LICENSE).
+

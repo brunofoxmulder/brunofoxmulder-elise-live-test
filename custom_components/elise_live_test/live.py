@@ -59,7 +59,6 @@ class LiveEvent:
     output_transcript: str | None = None
     tool_calls: list[LiveToolCall] = field(default_factory=list)
     turn_complete: bool = False
-    generation_complete: bool = False
 
     interrupted: bool = False
     user_activity_started: bool = False
@@ -92,3 +91,4 @@ class LiveClient(Protocol):
     """Factory for configured provider sessions."""
 
     def connect(self, config: LiveConfig) -> Any: ...
+

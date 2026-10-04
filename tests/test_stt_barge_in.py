@@ -27,7 +27,6 @@ from elise_live_test.stt import (
     GeminiLiveSTT,
     GPTRealtimeSTT,
     _add_search_tool_instruction,
-    _annotate_home_action_result,
 )
 from elise_live_test.utils import PCM24kTo16kStreamResampler, resample_24k_to_16k
 from homeassistant.components.stt import (
@@ -52,43 +51,10 @@ EXTRA_MIC_CHUNKS = 2
 ENTITY_CLASSES = [GeminiLiveSTT, GPTRealtimeSTT]
 
 
-def test_home_action_confirmation_uses_only_current_successful_entity() -> None:
-    result = {
-        "response_type": "action_done",
-        "data": {
-            "success": [{"name": "Lampe entrée", "type": "entity", "id": "light.entree"}],
-            "failed": [],
-        },
-    }
-
-    annotated = _annotate_home_action_result("assist__intent__HassTurnOn", result)
-
-    assert annotated["spoken_confirmation_targets"] == ["Lampe entrée"]
-    assert "salon" not in str(annotated).lower()
-    assert "spoken_confirmation_targets" not in result
-    assert _annotate_home_action_result("assist__intent__HassTurnOff", result)[
-        "spoken_confirmation_targets"
-    ] == ["Lampe entrée"]
-
-
-def test_failed_or_unrelated_tools_do_not_claim_action_success() -> None:
-    failed = {
-        "response_type": "action_done",
-        "data": {
-            "success": [{"name": "Lampe entrée", "type": "entity"}],
-            "failed": [{"name": "Lampe salon", "type": "entity"}],
-        },
-    }
-    assert _annotate_home_action_result("assist__intent__HassTurnOn", failed) is failed
-    assert _annotate_home_action_result("GetHistory", failed) is failed
-
-
 @pytest.fixture(autouse=True)
 def _core_supports_interruption(monkeypatch: pytest.MonkeyPatch):
     """Pretend Core provides the complete TTS interruption path."""
-    monkeypatch.setattr(
-        "elise_live_test.stt.supports_tts_interruption", lambda: True
-    )
+    monkeypatch.setattr("elise_live_test.stt.supports_tts_interruption", lambda: True)
 
 
 def test_native_search_grounding_adds_search_instruction_without_assist_tool():
@@ -110,31 +76,6 @@ def test_exposed_search_instruction_still_requires_search_like_tool():
         True,
     )
     assert instruction.startswith("base\n\nYou MUST use")
-
-
-def test_exposed_searxng_search_survives_without_native_grounding():
-    """SearXNG-style HA/MCP search remains usable with Google grounding off."""
-    instruction = _add_search_tool_instruction(
-        "base",
-        [SimpleNamespace(name="searxng_search")],
-        True,
-        native_search_grounding=False,
-    )
-
-    assert instruction.startswith("base\n\nYou MUST use")
-
-
-def test_no_native_grounding_does_not_invent_search_without_exposed_tool():
-    """Google grounding off must not create a search path on its own."""
-    assert (
-        _add_search_tool_instruction(
-            "base",
-            [],
-            True,
-            native_search_grounding=False,
-        )
-        == "base"
-    )
 
 
 def test_stream_resampler_preserves_phase_across_arbitrary_chunks() -> None:
@@ -529,7 +470,6 @@ async def test_audio_tool_context_preserves_pipeline_provenance(
         },
         entity_class,
     )
-    # The fake API merger records the selected APIs and the voice Context.
     session = ScriptedSession(support_barge_in=False)
     _bind_client(entity, ScriptedClient(session))
     source_context = Context(user_id="voice-user", parent_id="parent-context")
@@ -728,17 +668,3 @@ async def test_placeholder_transcript_carries_unique_turn_id(
     assert turn.assistant_text.startswith(GEMINI_LIVE_TTS_PLACEHOLDER)
     assert turn.assistant_text != GEMINI_LIVE_TTS_PLACEHOLDER
 
-
-def test_exposed_search_and_native_grounding_are_independent():
-    """An exposed SearXNG tool remains encouraged independently of Google grounding."""
-    tools = [SimpleNamespace(name="searxng_search")]
-
-    exposed_only = _add_search_tool_instruction(
-        "base", tools, True, native_search_grounding=False
-    )
-    native_only = _add_search_tool_instruction(
-        "base", [], True, native_search_grounding=True
-    )
-
-    assert exposed_only.startswith("base\n\nYou MUST use")
-    assert native_only.startswith("base\n\nYou MUST use")
