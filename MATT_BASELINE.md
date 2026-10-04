@@ -81,6 +81,34 @@ explicitly agreed. Disabling output transcription bypasses this particular
 dependency but sacrifices assistant response text; it is not a fix for all
 voice failures or a recommended permanent substitute for complete replies.
 
+## Bruno's confirmed scope — 4 October 2026, 13:21 Paris
+
+Bruno confirms: use Matt's integration and add the tools. He reports no errors
+when using Matt. The reproduced transcript-enabled laboratory dependency is
+not evidence of a fault in his current Matt usage, or of every earlier Élise
+cutoff. No startup-buffer or other transport correction is authorized by this
+scope confirmation.
+
+Read-only HA checks on this session found both `gemini_live` and
+`elise_live_test` loaded, with `gemini-3.8-live`. Matt has
+`transcribe_gemini=false`; Élise Live Test has `transcribe_gemini=true`.
+The `gemini_live` entities belong to Matt and `gemini_live_2` entities belong
+to Élise Live Test. These are dated observations, not permanent configuration
+assumptions. No settings were changed.
+
+Direct comparison of this candidate's code at `b338616` with the pinned Matt
+commit independently passed all twelve transport contracts, including both
+source equality and recorded SHA-256 checks. The remaining differences in
+`stt.py`, `conversation.py` and `gemini.py` were reviewed: API selection,
+GetHistory declaration/dispatch and SDK result envelopes. These checks do not
+run Gemini cloud or Voice Preview playback.
+
+Field comparison should use equivalent settings, including the output
+transcription setting used by the working Matt configuration. Installation,
+pipeline selection and any setting change require a separate explicit HA
+validation from Bruno. The candidate remains a draft; no merge or deployment
+is performed by this confirmation.
+
 ## Deployment status
 
 Candidate branch and draft PR only. No Home Assistant change, pipeline edit,
