@@ -7,8 +7,10 @@ décrit les actions proposées ; elle ne les autorise pas.
 
 Matt 1.0.9 (`d4ad0e5`) comme socle vocal, avec sélection des API HA,
 météo, GetHistory, mémoire et Investigator. Pas de modification du tampon,
-du transport ou de la fermeture des tours. SDK identique à Matt :
-`google-genai==2.21.0`, `msgpack==1.1.2`.
+du transport ou de la fermeture des tours. Écart de dépendance documenté : Matt fixe le SDK 2.21.0 ; Hassfest le refuse
+car Home Assistant dépend du SDK 2.25.0. Candidate :
+`google-genai==2.25.0`, `msgpack==1.1.2`, testés comme installés.
+Le code vocal Matt reste identique ; l’identité de SDK n’est pas revendiquée.
 
 ## État de départ vérifié le 4 octobre 2026
 

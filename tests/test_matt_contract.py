@@ -31,8 +31,8 @@ def test_transport_matches_pinned_matt(contract):
     )
 
 
-def test_runtime_dependencies_match_pinned_matt():
-    """Prevent installation from using a different SDK than the Matt baseline."""
+def test_runtime_dependencies_match_validated_sdk():
+    """Prevent installation from using a different SDK than the validated packaging."""
     manifest = json.loads(
         (ROOT / "custom_components/elise_live_test/manifest.json").read_text()
     )

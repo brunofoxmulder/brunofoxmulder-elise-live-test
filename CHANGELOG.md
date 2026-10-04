@@ -9,8 +9,10 @@ All notable changes to Gemini Live for Home Assistant are documented here.
 - Limit extensions to saved API selection, Recorder GetHistory and the Gemini
   object envelope for weather/MCP results.
 - Pin upstream transport contracts and test against Home Assistant 2026.9.4.
-- Align runtime dependencies with Matt: google-genai==2.21.0 and msgpack==1.1.2.
-  CI installs from the actual manifest; a separate contract prevents SDK drift.
+- Pin the HA-compatible runtime SDK google-genai==2.25.0 and msgpack==1.1.2.
+  Matt pins 2.21.0, which Hassfest rejects against HA's 2.25.0 requirement.
+  Keep Matt's voice source unchanged; CI installs the candidate's actual
+  manifest requirements and a separate contract prevents packaging drift.
 - Remove the previous Élise-specific partial-text return, early generation
   completion and action-confirmation rewriting. Field validation remains open.
 

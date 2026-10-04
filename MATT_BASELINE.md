@@ -109,6 +109,17 @@ pipeline selection and any setting change require a separate explicit HA
 validation from Bruno. The candidate remains a draft; no merge or deployment
 is performed by this confirmation.
 
+## Runtime packaging compatibility
+
+The original code review and 139-test baseline used google-genai 2.21.0.
+The first test.2 packaging attempt pinned Matt's exact SDK, but Hassfest rejected
+it because Home Assistant depends on google-genai 2.25.0. The reviewed runtime
+candidate therefore pins google-genai==2.25.0 (and msgpack==1.1.2). CI installs
+these requirements directly from the manifest; a separate dependency contract
+records the validated runtime and Matt's upstream dependency separately. The
+voice source remains pinned to Matt. SDK equality with upstream is not claimed.
+See RECETTE_MATT_OUTILS.md for field checks and separate HA approval.
+
 ## Deployment status
 
 Candidate branch and draft PR only. No Home Assistant change, pipeline edit,
