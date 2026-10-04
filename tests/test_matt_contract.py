@@ -3,6 +3,7 @@
 import ast
 import hashlib
 import json
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
@@ -37,3 +38,4 @@ def test_runtime_dependencies_match_validated_sdk():
         (ROOT / "custom_components/elise_live_test/manifest.json").read_text()
     )
     assert manifest["requirements"] == CONTRACT["requirements"]
+    assert version("google-genai") == CONTRACT["validated_google_genai"]

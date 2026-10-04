@@ -114,8 +114,10 @@ is performed by this confirmation.
 The original code review and 139-test baseline used google-genai 2.21.0.
 The first test.2 packaging attempt pinned Matt's exact SDK, but Hassfest rejected
 it because Home Assistant depends on google-genai 2.25.0. The reviewed runtime
-candidate therefore pins google-genai==2.25.0 (and msgpack==1.1.2). CI installs
-these requirements directly from the manifest; a separate dependency contract
+candidate therefore declares google-genai>=2.25.0 (and msgpack==1.1.2): Hassfest
+requires a compatible minimum, not a strict pin, for HA-shared packages. CI
+installs the manifest requirements constrained to the validated SDK 2.25.0;
+the test also verifies the actual installed SDK. A separate dependency contract
 records the validated runtime and Matt's upstream dependency separately. The
 voice source remains pinned to Matt. SDK equality with upstream is not claimed.
 See RECETTE_MATT_OUTILS.md for field checks and separate HA approval.

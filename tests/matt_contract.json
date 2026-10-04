@@ -69,11 +69,12 @@
     }
   ],
   "requirements": [
-    "google-genai==2.25.0",
+    "google-genai>=2.25.0",
     "msgpack==1.1.2"
   ],
   "upstream_requirements": [
     "google-genai==2.21.0",
     "msgpack==1.1.2"
-  ]
+  ],
+  "validated_google_genai": "2.25.0"
 }
