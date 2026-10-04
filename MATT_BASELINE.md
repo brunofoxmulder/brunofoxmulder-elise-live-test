@@ -39,15 +39,47 @@ the Élise-specific early completion on `generationComplete`.
 Local validation uses Python 3.14, real Home Assistant Core 2026.9.4 and
 `google-genai==2.21.0`. Tests cover upstream session/audio behavior, pipeline
 provenance, late transcript chunks, API selection, Recorder calculations and
-SDK acceptance of weather/history/memory results. The suite has 135 tests.
+SDK acceptance of weather/history/memory results. The suite has 139 tests.
 
 This proves offline contracts and compatibility, not cloud reliability or real
 Voice Preview playback. A bounded-audio-buffer/HA streaming-start dependency
-was reproduced in isolation in the upstream implementation. It remains an
-upstream risk, intentionally not patched in this tool-only candidate. No claim
+is characterized with actual Core intent recognition and chat-log streaming
+in `tests/test_pipeline_startup.py` (details below). It remains an upstream
+limitation, intentionally not patched in this tool-only candidate. No claim
 is made that every cutoff, timeout, wrong spoken hour or model tool omission
 has been resolved. Live validation is still required, especially for short
 answers, repeated greetings, long replies and conversation completion.
+
+### Native pipeline startup limitation
+
+Core 2026.9.4 starts streaming TTS after more than 60 assistant characters,
+or a tool call following assistant text. For shorter responses it waits for
+intent recognition to return before supplying the final message to TTS.
+Matt's conversation handoff waits for the response transcript to finish.
+Its provider receive loop awaits audio-buffer space before handling a later
+transcript or turn-complete event. The default buffer holds 6400 PCM bytes.
+
+| Synthetic case | Result |
+| --- | --- |
+| Transcript enabled, 60 characters, three 3200-byte audio chunks | Producer and intent recognition remain pending; TTS has not started. Explicitly starting an audio consumer releases the cycle. |
+| Transcript enabled, 61 characters, same audio | Core starts streaming; the response completes. |
+| Transcript enabled, 60 characters, only two audio chunks | Audio fits the buffer; the response completes. |
+| Transcript disabled, same three audio chunks | Placeholder handoff returns without waiting for the transcript; the response completes. |
+
+The tests call the actual Core `PipelineRun.recognize_intent`, `ChatLog` and
+`ResultStream`, and the unchanged Matt conversation handoff and audio stream.
+They simulate provider events and a TTS manager consuming PCM. They do not run
+the complete STT receive coroutine, network provider, audio conversion, or
+satellite playback. The passing characterization test confirms the limitation;
+it does not certify the affected configuration as working. A long response may
+also stall if the receive loop fills its audio buffer before enough transcript
+characters arrive. Disabling interruption does not remove this buffer limit.
+
+This candidate is not approved for transcript-enabled vocal field testing until
+the upstream startup dependency is resolved or a separate transport change is
+explicitly agreed. Disabling output transcription bypasses this particular
+dependency but sacrifices assistant response text; it is not a fix for all
+voice failures or a recommended permanent substitute for complete replies.
 
 ## Deployment status
 
