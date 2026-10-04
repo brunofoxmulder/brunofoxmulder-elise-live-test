@@ -29,3 +29,11 @@ def test_transport_matches_pinned_matt(contract):
         f"Transport diverged from Matt {CONTRACT['commit']}: {contract['id']}. "
         "Review this change separately from tool additions."
     )
+
+
+def test_runtime_dependencies_match_pinned_matt():
+    """Prevent installation from using a different SDK than the Matt baseline."""
+    manifest = json.loads(
+        (ROOT / "custom_components/elise_live_test/manifest.json").read_text()
+    )
+    assert manifest["requirements"] == CONTRACT["requirements"]

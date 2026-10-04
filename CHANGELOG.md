@@ -2,13 +2,15 @@
 
 All notable changes to Gemini Live for Home Assistant are documented here.
 
-## Unreleased — Matt baseline with tools
+## 0.1.0-test.2 — Matt baseline with tools (candidate)
 
 - Restore Matt 1.0.9 at d4ad0e5 for audio buffering, sessions, TTS, progressive
   conversation text and protocol completion.
 - Limit extensions to saved API selection, Recorder GetHistory and the Gemini
   object envelope for weather/MCP results.
 - Pin upstream transport contracts and test against Home Assistant 2026.9.4.
+- Align runtime dependencies with Matt: google-genai==2.21.0 and msgpack==1.1.2.
+  CI installs from the actual manifest; a separate contract prevents SDK drift.
 - Remove the previous Élise-specific partial-text return, early generation
   completion and action-confirmation rewriting. Field validation remains open.
 

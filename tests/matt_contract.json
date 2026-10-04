@@ -67,5 +67,9 @@
       "method": "async_process_audio_stream",
       "sha256": "53f38969f3feeba9d0f57305caca1e5c559ebec8b4f7713832fbbbdc1182da2b"
     }
+  ],
+  "requirements": [
+    "google-genai==2.21.0",
+    "msgpack==1.1.2"
   ]
 }
