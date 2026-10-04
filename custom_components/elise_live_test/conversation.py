@@ -21,6 +21,7 @@ from .history_tool import (
     add_history_tool,
     async_handle_history_tool,
 )
+from .tools import selected_api_ids
 from .live import LiveConfig, LiveTool, LiveToolResponse
 from .const import (
     CONF_API_KEY,
@@ -52,14 +53,12 @@ from .const import (
 )
 from .stt import (
     END_CONVERSATION_TOOL_NAME,
-    _add_action_confirmation_instruction,
     _add_end_conversation_instruction,
     _add_end_conversation_tool,
     _add_search_tool_instruction,
     _format_tools_for_live,
     _is_connection_closed_ok,
     _validate_tool_results,
-    _annotate_home_action_result,
 )
 from .openai import OpenAIRealtimeClient
 from .runtime import AudioStream, new_conversation_id
@@ -165,15 +164,23 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
         """Load HA Assist tools and the final live-model instruction."""
         config = {**self.entry.data, **self.entry.options}
         custom_instruction = config.get(CONF_SYSTEM_INSTRUCTION, "")
-        encourage_web_search = bool(
-            config.get(
-                CONF_ENCOURAGE_WEB_SEARCH,
-                DEFAULT_ENCOURAGE_WEB_SEARCH,
+        if self.supports_search_grounding:
+            encourage_web_search = bool(
+                config.get(
+                    CONF_SEARCH_GROUNDING,
+                    DEFAULT_SEARCH_GROUNDING,
+                )
             )
-        )
+        else:
+            encourage_web_search = bool(
+                config.get(
+                    CONF_ENCOURAGE_WEB_SEARCH,
+                    DEFAULT_ENCOURAGE_WEB_SEARCH,
+                )
+            )
         system_instruction = custom_instruction or self.default_system_instruction
 
-        api_ids = config.get(CONF_LLM_HASS_API, [llm.LLM_API_ASSIST])
+        api_ids = selected_api_ids(config)
         if not api_ids:
             live_tools = add_history_tool(_add_end_conversation_tool([]))
             system_instruction = _add_search_tool_instruction(
@@ -183,7 +190,6 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                 native_search_grounding=self.supports_search_grounding,
             )
             system_instruction = _add_end_conversation_instruction(system_instruction)
-            system_instruction = _add_action_confirmation_instruction(system_instruction)
             return None, live_tools, system_instruction
 
         try:
@@ -206,13 +212,12 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                 native_search_grounding=self.supports_search_grounding,
             )
             system_instruction = _add_end_conversation_instruction(system_instruction)
-            system_instruction = _add_action_confirmation_instruction(system_instruction)
 
             live_tools = _add_end_conversation_tool(
                 _format_tools_for_live(
                     llm_api.tools,
                     llm_api.custom_serializer,
-                    encourage_web_search,
+                    encourage_web_search and not self.supports_search_grounding,
                 )
             )
 
@@ -228,7 +233,7 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                 "path: %s. Tools will be unavailable.",
                 exc,
             )
-            live_tools = _add_end_conversation_tool([])
+            live_tools = add_history_tool(_add_end_conversation_tool([]))
             system_instruction = _add_search_tool_instruction(
                 system_instruction,
                 [],
@@ -236,7 +241,6 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                 native_search_grounding=self.supports_search_grounding,
             )
             system_instruction = _add_end_conversation_instruction(system_instruction)
-            system_instruction = _add_action_confirmation_instruction(system_instruction)
             live_tools = add_history_tool(live_tools)
             return (
                 None,
@@ -367,9 +371,6 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                                 else:
                                     tool_result = {"error": "HA LLM API not available"}
                                 tool_result = _validate_tool_results(tool_result)
-                                tool_result = _annotate_home_action_result(
-                                    tool_name, tool_result
-                                )
 
                                 _LOGGER.debug(
                                     "[turn=%s] LLM tool response name=%s id=%s response=%r",
@@ -493,27 +494,28 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
             if voice_turn.assistant_text_stream is not None:
                 if not isinstance(voice_turn.audio, AudioStream):
                     raise RuntimeError("Streaming transcript has no streaming audio")
-                # Keep the TTS stream discoverable even if Gemini has not emitted
-                # an output transcription yet. The full text stream closes only
-                # when the Live session ends, which may be much later than its audio.
                 turn_store.add_streaming_audio(
                     voice_turn.assistant_text_stream,
                     voice_turn.audio,
-                    fallback_assistant_text,
                 )
 
-                # Assist runs the conversation stage before TTS. Waiting for every
-                # transcript chunk here holds playback until the Live receive loop
-                # finishes (or times out). Return the text already available and let
-                # TTS consume the audio stream while Gemini is still generating.
+                async def transcript_deltas():
+                    """Yield the live model's response transcript into Home Assistant."""
+                    yield {"role": "assistant"}
+                    received_text = False
+                    async for chunk in voice_turn.assistant_text_stream.async_chunks():
+                        received_text = True
+                        yield {"content": chunk}
+                    if not received_text:
+                        yield {"content": fallback_assistant_text}
+
+                async for _content in chat_log.async_add_delta_content_stream(
+                    self.entity_id,
+                    transcript_deltas(),
+                ):
+                    pass
                 assistant_text = (
                     voice_turn.assistant_text_stream.text or fallback_assistant_text
-                )
-                chat_log.async_add_assistant_content_without_tools(
-                    conversation.AssistantContent(
-                        agent_id=self.entity_id,
-                        content=assistant_text,
-                    )
                 )
             else:
                 assistant_text = fallback_assistant_text
@@ -591,3 +593,4 @@ class GPTRealtimeConversationAgent(LiveModelConversationAgent):
     async def _async_create_client(self, api_key: str) -> OpenAIRealtimeClient:
         """Create an OpenAI Realtime WebSocket client."""
         return OpenAIRealtimeClient(async_get_clientsession(self.hass), api_key)
+

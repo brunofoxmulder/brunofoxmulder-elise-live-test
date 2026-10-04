@@ -2,6 +2,16 @@
 
 All notable changes to Gemini Live for Home Assistant are documented here.
 
+## Unreleased — Matt baseline with tools
+
+- Restore Matt 1.0.9 at d4ad0e5 for audio buffering, sessions, TTS, progressive
+  conversation text and protocol completion.
+- Limit extensions to saved API selection, Recorder GetHistory and the Gemini
+  object envelope for weather/MCP results.
+- Pin upstream transport contracts and test against Home Assistant 2026.9.4.
+- Remove the previous Élise-specific partial-text return, early generation
+  completion and action-confirmation rewriting. Field validation remains open.
+
 ## 1.0.9
 
 - Corrected Affective Dialog support: the option is now offered only for
@@ -132,3 +142,4 @@ All notable changes to Gemini Live for Home Assistant are documented here.
   text-to-speech entities.
 - Added HACS metadata, brand assets, translations, validation workflow, and
   installation documentation.
+

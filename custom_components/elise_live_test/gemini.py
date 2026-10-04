@@ -192,11 +192,6 @@ class GeminiLiveSession:
                     if content.input_transcription and content.input_transcription.text:
                         yield LiveEvent(input_transcript=content.input_transcription.text)
 
-                    if getattr(content, "generation_complete", False) and not (
-                        self._extended_thinking and interaction_in_progress
-                    ):
-                        yield LiveEvent(generation_complete=True)
-
                     interrupted = bool(getattr(content, "interrupted", False))
                     if interrupted:
                         interrupted_turn = True
@@ -372,3 +367,4 @@ def _escape_decode(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: _escape_decode(item) for key, item in value.items()}
     return value
+

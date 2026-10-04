@@ -1,66 +1,49 @@
-"""Focused non-regression tests for Élise multi-API/MCP integration."""
+"""Tool selection and real Gemini SDK result-envelope contracts."""
 
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
+from homeassistant.exceptions import HomeAssistantError
 
-from elise_live_test.tools import async_load_tools, selected_api_ids
+from elise_live_test.gemini import GeminiLiveSession
+from elise_live_test.live import LiveToolResponse
+from elise_live_test.tools import selected_api_ids
 
 
-def test_selected_api_ids_defaults_to_assist():
-    assert selected_api_ids({}) == ["assist"]
-
-
-def test_selected_api_ids_preserves_multiple_and_deduplicates():
-    assert selected_api_ids({"llm_hass_api": ["assist", "memory", "assist"]}) == [
-        "assist",
-        "memory",
+def test_selection_keeps_saved_weather_memory_and_assist():
+    assert selected_api_ids({"llm_hass_api": ["assist", "weather", "memory", "assist"]}) == [
+        "assist", "weather", "memory"
     ]
 
 
-def test_selected_api_ids_empty_is_intentional():
-    assert selected_api_ids({"llm_hass_api": []}) == []
+def test_empty_selection_is_not_the_legacy_assist_default():
+    assert selected_api_ids({}) == ["assist"]
+    for value in ([], "", None):
+        assert selected_api_ids({"llm_hass_api": value}) == []
+    assert selected_api_ids({"llm_hass_api": "weather"}) == ["weather"]
 
 
-@pytest.mark.asyncio
-async def test_async_load_tools_requests_all_selected_apis(monkeypatch):
-    calls = []
-
-    async def fake_get_api(*, hass, api_id, llm_context):
-        calls.append(api_id)
-        return SimpleNamespace(
-            tools=[SimpleNamespace(name="HassTurnOn"), SimpleNamespace(name="Memory")],
-        )
-
-    monkeypatch.setattr("elise_live_test.tools.llm.async_get_api", fake_get_api)
-    result = await async_load_tools(
-        object(),
-        {"llm_hass_api": ["assist", "agent_memory"]},
-        object(),
-    )
-
-    assert result is not None
-    assert calls == [["assist", "agent_memory"]]
+@pytest.mark.parametrize("value", [123, {}, ["assist", 3], [""]])
+def test_invalid_selection_is_rejected(value):
+    with pytest.raises(HomeAssistantError):
+        selected_api_ids({"llm_hass_api": value})
 
 
-@pytest.mark.asyncio
-async def test_async_load_tools_empty_selection_does_not_fallback(monkeypatch):
-    async def forbidden(*args, **kwargs):
-        raise AssertionError("async_get_api must not be called")
-
-    monkeypatch.setattr("elise_live_test.tools.llm.async_get_api", forbidden)
-    assert await async_load_tools(object(), {"llm_hass_api": []}, object()) is None
-
-
-@pytest.mark.asyncio
-async def test_async_load_tools_rejects_reserved_tool_name(monkeypatch):
-    async def fake_get_api(*, hass, api_id, llm_context):
-        return SimpleNamespace(tools=[SimpleNamespace(name="end_conversation")])
-
-    monkeypatch.setattr("elise_live_test.tools.llm.async_get_api", fake_get_api)
-    with pytest.raises(Exception, match="Conflicting tool name"):
-        await async_load_tools(
-            object(),
-            {"llm_hass_api": ["assist"]},
-            object(),
-        )
+@pytest.mark.parametrize("result", [
+    "Sunny, 18 C, daily maximum 26 C",
+    {"states": [{"state": "on", "time": "2026-10-04T11:00:00+02:00"}]},
+    ["memory one", "memory two"],
+    None,
+])
+async def test_real_sdk_accepts_weather_history_memory_results(result):
+    """Exercise FunctionResponse validation, not a mock of its schema."""
+    sdk = SimpleNamespace(send_tool_response=AsyncMock())
+    session = GeminiLiveSession(sdk)
+    await session.send_tool_responses([
+        LiveToolResponse("weather_or_history", "call-1", result)
+    ])
+    response = sdk.send_tool_response.call_args.kwargs["function_responses"][0]
+    assert response.name == "weather_or_history"
+    assert response.id == "call-1"
+    assert response.response == (result if isinstance(result, dict) else {"result": result})
