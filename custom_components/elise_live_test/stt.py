@@ -42,6 +42,11 @@ from .history_tool import (
     async_handle_history_tool,
 )
 from .tools import selected_api_ids
+from .time_tool import (
+    CURRENT_TIME_TOOL_NAME,
+    add_current_time_tool,
+    async_handle_current_time_tool,
+)
 from .live import LiveConfig, LiveTool, LiveToolResponse
 from .const import (
     CONF_API_KEY,
@@ -551,6 +556,7 @@ class LiveModelSTT(SpeechToTextEntity):
             else []
         )
         live_tools = add_history_tool(live_tools)
+        live_tools = add_current_time_tool(live_tools)
         _LOGGER.debug(
             "Exposing %d tools to the live model: %s",
             len(live_tools),
@@ -836,6 +842,10 @@ class LiveModelSTT(SpeechToTextEntity):
                                         "success": True,
                                         "conversation_ended": True,
                                     }
+                                elif tool_name == CURRENT_TIME_TOOL_NAME:
+                                    tool_result = await async_handle_current_time_tool(
+                                        self.hass, tool_args
+                                    )
                                 elif tool_name == HISTORY_TOOL_NAME:
                                     try:
                                         tool_result = await async_handle_history_tool(
