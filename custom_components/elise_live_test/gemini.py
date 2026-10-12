@@ -342,9 +342,18 @@ def _gemini_schema(schema: dict[str, Any]) -> dict[str, Any]:
             value = {name: _gemini_schema(item) for name, item in value.items()}
         result[key] = value
 
-    if result.get("enum") and result.get("type") != "STRING":
-        result["type"] = "STRING"
-        result["enum"] = [str(item) for item in result["enum"]]
+    if result.get("enum"):
+        # Home Assistant and third-party LLM APIs may describe an optional
+        # string value by including JSON null in its enum. Gemini's SDK accepts
+        # only strings in Schema.enum, and optionality is already represented
+        # by the parent's required list, so discard null and normalize every
+        # remaining value before constructing LiveConnectConfig.
+        enum = [str(item) for item in result["enum"] if item is not None]
+        if enum:
+            result["type"] = "STRING"
+            result["enum"] = enum
+        else:
+            result.pop("enum", None)
     if result.get("type") == "OBJECT" and not result.get("properties"):
         result["properties"] = {"json": {"type": "STRING"}}
         result["required"] = []
