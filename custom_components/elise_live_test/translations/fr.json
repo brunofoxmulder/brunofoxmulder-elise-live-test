@@ -1,5 +1,5 @@
 {
-  "title": "Élise Live",
+  "title": "Élise Live Test",
   "config": {
     "step": {
       "user": {
@@ -21,6 +21,7 @@
           "transcribe_gemini": "Transcrire Gemini",
           "transcribe_gpt": "Transcrire OpenAI",
           "encourage_web_search": "Encourager la recherche Internet",
+          "enable_sound_responses": "Réponses sonores",
           "llm_hass_api": "API LLM Home Assistant",
           "search_grounding": "Recherche Google native",
           "thinking_level": "Niveau de réflexion",
@@ -32,6 +33,7 @@
           "api_key": "Les données vocales, textes et résultats des outils sont transmis au fournisseur choisi.",
           "llm_hass_api": "Choisir les API LLM dont Élise peut utiliser les outils. Assist donne accès aux appareils ; ajouter une API de mémoire si elle est installée. Une sélection vide désactive ces outils.",
           "encourage_web_search": "Encourage un outil de recherche déjà sélectionné ; ne donne pas accès à Internet à lui seul.",
+          "enable_sound_responses": "Autorise le modèle à jouer un court signal sonore plutôt qu’une réponse parlée pour les confirmations simples. Désactivé par défaut.",
           "detailed_logging": "Peut enregistrer les transcriptions et les appels d’outils. À activer seulement pour diagnostiquer.",
           "model": "Modèle utilisé par le fournisseur sélectionné.",
           "voice": "Voix utilisée pour les réponses audio.",
@@ -57,6 +59,7 @@
           "transcribe_gemini": "Transcrire Gemini",
           "transcribe_gpt": "Transcrire OpenAI",
           "encourage_web_search": "Encourager la recherche Internet",
+          "enable_sound_responses": "Réponses sonores",
           "llm_hass_api": "API LLM Home Assistant",
           "search_grounding": "Recherche Google native",
           "thinking_level": "Niveau de réflexion",
@@ -68,6 +71,7 @@
           "api_key": "Les données vocales, textes et résultats des outils sont transmis au fournisseur choisi.",
           "llm_hass_api": "Choisir les API LLM dont Élise peut utiliser les outils. Assist donne accès aux appareils ; ajouter une API de mémoire si elle est installée. Une sélection vide désactive ces outils.",
           "encourage_web_search": "Encourage un outil de recherche déjà sélectionné ; ne donne pas accès à Internet à lui seul.",
+          "enable_sound_responses": "Autorise le modèle à jouer un court signal sonore plutôt qu’une réponse parlée pour les confirmations simples. Désactivé par défaut.",
           "detailed_logging": "Peut enregistrer les transcriptions et les appels d’outils. À activer seulement pour diagnostiquer.",
           "model": "Modèle utilisé par le fournisseur sélectionné.",
           "search_grounding": "Active la recherche Google native du modèle. Laisser désactivé pour utiliser les outils de recherche HA/MCP comme SearXNG.",
@@ -96,6 +100,7 @@
           "transcribe_gemini": "Transcrire Gemini",
           "transcribe_gpt": "Transcrire OpenAI",
           "encourage_web_search": "Encourager la recherche Internet",
+          "enable_sound_responses": "Réponses sonores",
           "llm_hass_api": "API LLM Home Assistant",
           "search_grounding": "Recherche Google native",
           "thinking_level": "Niveau de réflexion",
@@ -107,6 +112,7 @@
           "api_key": "Les données vocales, textes et résultats des outils sont transmis au fournisseur choisi.",
           "llm_hass_api": "Choisir les API LLM dont Élise peut utiliser les outils. Assist donne accès aux appareils ; ajouter une API de mémoire si elle est installée. Une sélection vide désactive ces outils.",
           "encourage_web_search": "Encourage un outil de recherche déjà sélectionné ; ne donne pas accès à Internet à lui seul.",
+          "enable_sound_responses": "Autorise le modèle à jouer un court signal sonore plutôt qu’une réponse parlée pour les confirmations simples. Désactivé par défaut.",
           "detailed_logging": "Peut enregistrer les transcriptions et les appels d’outils. À activer seulement pour diagnostiquer.",
           "model": "Modèle utilisé par le fournisseur sélectionné.",
           "search_grounding": "Active la recherche Google native du modèle. Laisser désactivé pour utiliser les outils de recherche HA/MCP comme SearXNG.",

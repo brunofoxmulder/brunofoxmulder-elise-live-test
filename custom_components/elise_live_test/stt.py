@@ -41,13 +41,13 @@ from .history_tool import (
     add_history_tool,
     async_handle_history_tool,
 )
-from .tools import selected_api_ids
 from .live import LiveConfig, LiveTool, LiveToolResponse
 from .const import (
     CONF_API_KEY,
     CONF_AFFECTIVE_DIALOG,
     CONF_DETAILED_LOGGING,
     CONF_ENCOURAGE_WEB_SEARCH,
+    CONF_ENABLE_SOUND_RESPONSES,
     CONF_MODEL,
     CONF_PROVIDER,
     CONF_RESPONSE_TIMEOUT,
@@ -65,6 +65,7 @@ from .const import (
     DEFAULT_TRANSCRIBE_GEMINI,
     DEFAULT_TRANSCRIBE_GPT,
     DEFAULT_ENCOURAGE_WEB_SEARCH,
+    DEFAULT_ENABLE_SOUND_RESPONSES,
     DEFAULT_SYSTEM_INSTRUCTION,
     DEFAULT_SEARCH_GROUNDING,
     DOMAIN,
@@ -77,6 +78,12 @@ from .const import (
     SUPPORTED_LANGUAGES,
 )
 from .openai import OpenAIRealtimeClient
+from .sounds import (
+    PLAY_SOUND_TOOL,
+    PLAY_SOUND_TOOL_NAME,
+    SOUND_INSTRUCTION,
+    async_sound_response,
+)
 from .runtime import (
     AudioStream,
     PipelineTurn,
@@ -105,6 +112,27 @@ _SEARCH_TOOL_INSTRUCTION = (
     "answer may have changed since your training data. Also use it when the user "
     "explicitly asks you to search, look up, check online, or verify something. "
     "Do not guess current external facts when the search tool can verify them."
+)
+
+_SEARCH_GROUNDING_INSTRUCTION = (
+    "You MUST use the available built-in Google Search grounding to answer "
+    "factual questions that cannot be answered by Home Assistant or its tools. "
+    "Use Home Assistant tools for home/device state and control, and web search "
+    "for external information. For requests combining both, use both sources. "
+    "Search proactively without waiting for the user to ask you to search or "
+    "restate their question. This includes news and headlines (including BBC "
+    "news), current events, external weather and forecasts, and general factual "
+    "questions outside Home Assistant's data. Always search for current, latest, "
+    "recent, live, or time-sensitive information, facts that may have changed, "
+    "and explicit requests to search, look up, check online, or verify. "
+    "Home Assistant's scope restrictions apply to its tools; they do not prevent "
+    "you from answering external questions using Google Search. Built-in search "
+    "is available even when no Home Assistant web-search function is listed. "
+    "Do not claim you cannot access the web or current news without trying "
+    "search first. Use the search results to answer directly; if the user names "
+    "a source such as the BBC, search for and prioritize that source. If search "
+    "fails or does not verify the requested facts, explain that honestly rather "
+    "than inventing results."
 )
 
 _SPENDING_CAP_ERROR_MARKER = "exceeded its monthly spending cap"
@@ -264,14 +292,25 @@ def _format_tools_for_live(
 
 def _add_end_conversation_tool(
     tools: list[LiveTool],
+    *,
+    enable_sound_responses: bool = False,
 ) -> list[LiveTool]:
-    """Add the integration-owned conversation completion callback."""
-    return [*tools, _END_CONVERSATION_TOOL]
+    """Add integration-owned response and conversation tools."""
+    return [
+        *tools,
+        _END_CONVERSATION_TOOL,
+        *([PLAY_SOUND_TOOL] if enable_sound_responses else []),
+    ]
 
 
-def _add_end_conversation_instruction(system_instruction: str) -> str:
+def _add_end_conversation_instruction(
+    system_instruction: str, *, enable_sound_responses: bool = False
+) -> str:
     """Tell Gemini when to finish the Home Assistant conversation."""
-    return f"{system_instruction}\n\n{_END_CONVERSATION_INSTRUCTION}"
+    instruction = f"{system_instruction}\n\n{_END_CONVERSATION_INSTRUCTION}"
+    if enable_sound_responses:
+        instruction += f"\n\n{SOUND_INSTRUCTION}"
+    return instruction
 
 
 def _add_search_tool_instruction(
@@ -286,11 +325,22 @@ def _add_search_tool_instruction(
         native_search_grounding or has_exposed_search_tool
     ):
         return system_instruction
-    return f"{system_instruction}\n\n{_SEARCH_TOOL_INSTRUCTION}"
+    instruction = (
+        _SEARCH_GROUNDING_INSTRUCTION
+        if native_search_grounding
+        else _SEARCH_TOOL_INSTRUCTION
+    )
+    return f"{system_instruction}\n\n{instruction}"
 
 
 def _validate_tool_results(value: Any) -> Any:
-    """Recursively convert non-json-serializable tool results."""
+    """Convert HA tool responses to provider JSON, including Core 2026.10."""
+    # Older Core versions return a dictionary and have no ToolResult class.
+    result_type = getattr(llm, "ToolResult", None)
+    if result_type is not None and isinstance(value, result_type):
+        data = _validate_tool_results(value.data)
+        # Convey failed calls to the provider without dropping the HA error flag.
+        return {"error": data} if value.error else data
     if isinstance(value, (datetime.time, datetime.date)):
         return value.isoformat()
     if isinstance(value, list):
@@ -403,12 +453,15 @@ class LiveModelSTT(SpeechToTextEntity):
     def _effective_support_barge_in(self) -> bool:
         """Return whether barge-in is both configured and supported by Core."""
         config = {**self.entry.data, **self.entry.options}
-        return bool(
-            config.get(
-                CONF_SUPPORT_BARGE_IN,
-                DEFAULT_SUPPORT_BARGE_IN,
+        return (
+            bool(
+                config.get(
+                    CONF_SUPPORT_BARGE_IN,
+                    DEFAULT_SUPPORT_BARGE_IN,
+                )
             )
-        ) and supports_tts_interruption()
+            and supports_tts_interruption()
+        )
 
     @property
     def audio_processing(self) -> SpeechAudioProcessing:
@@ -451,7 +504,7 @@ class LiveModelSTT(SpeechToTextEntity):
         session_manager = entry_data[self.session_manager_key]
         if await session_manager.async_prepare_for_new_turn(conversation_id):
             _LOGGER.info(
-                "[turn=%s] cancelled unfinished provider turn for conversation %s",
+                "[turn=%s] stopped previous provider listener for conversation %s",
                 turn_id,
                 conversation_id,
             )
@@ -486,7 +539,10 @@ class LiveModelSTT(SpeechToTextEntity):
         response_inactivity_timeout = float(
             config.get(CONF_RESPONSE_TIMEOUT, DEFAULT_RESPONSE_TIMEOUT)
         )
-        api_ids = selected_api_ids(config)
+        sound_responses_enabled = bool(
+            config.get(CONF_ENABLE_SOUND_RESPONSES, DEFAULT_ENABLE_SOUND_RESPONSES)
+        )
+        api_ids = config.get(CONF_LLM_HASS_API, [llm.LLM_API_ASSIST])
 
         if api_ids:
             try:
@@ -539,7 +595,9 @@ class LiveModelSTT(SpeechToTextEntity):
                 encourage_web_search,
                 native_search_grounding=True,
             )
-        system_instruction = _add_end_conversation_instruction(system_instruction)
+        system_instruction = _add_end_conversation_instruction(
+            system_instruction, enable_sound_responses=sound_responses_enabled
+        )
 
         live_tools = _add_end_conversation_tool(
             _format_tools_for_live(
@@ -548,7 +606,8 @@ class LiveModelSTT(SpeechToTextEntity):
                 encourage_web_search and not self.supports_search_grounding,
             )
             if llm_api
-            else []
+            else [],
+            enable_sound_responses=sound_responses_enabled,
         )
         live_tools = add_history_tool(live_tools)
         _LOGGER.debug(
@@ -617,6 +676,7 @@ class LiveModelSTT(SpeechToTextEntity):
         audio_response_chunk_count = 0
         audio_response_bytes = 0
         audio_sent = False
+        sound_selected = False
         last_response_activity = time.monotonic()
         gemini_replied = asyncio.Event()
         first_audio = asyncio.Event()
@@ -740,8 +800,9 @@ class LiveModelSTT(SpeechToTextEntity):
                         await session.end_audio()
                 except asyncio.CancelledError:
                     _LOGGER.warning(
-                        "[turn=%s] audio sender cancelled — the model started replying",
+                        "[turn=%s] audio sender cancelled (response_started=%s)",
                         turn_id,
+                        gemini_replied.is_set(),
                     )
                     raise
                 except Exception as exc:  # noqa: BLE001
@@ -756,10 +817,21 @@ class LiveModelSTT(SpeechToTextEntity):
             async def receive_responses() -> None:
                 nonlocal audio_response_bytes, audio_response_chunk_count
                 nonlocal last_response_activity
+                nonlocal sound_selected
                 replacement_response_pending = False
                 try:
                     _LOGGER.warning("[turn=%s] receive_responses started", turn_id)
                     async for response in session.receive():
+                        if (
+                            response.user_activity_started
+                            or response.interrupted
+                            or response.input_transcript
+                            or response.tool_calls
+                            or response.audio
+                            or response.text
+                            or response.output_transcript
+                        ):
+                            session_manager.set_turn_complete(conversation_id, False)
                         # Audio packets are frequent and must stay on the hot
                         # path. Logging every packet can stall Home Assistant's
                         # event loop and turn steady PCM into bursty delivery.
@@ -780,6 +852,7 @@ class LiveModelSTT(SpeechToTextEntity):
                         if response.user_activity_stopped:
                             _LOGGER.debug("[turn=%s] user activity stopped", turn_id)
                         if response.interrupted:
+                            sound_selected = False
                             # An interrupted generation is followed by a
                             # replacement response in the same provider turn.
                             # Discard queued output audio but keep the Home
@@ -836,13 +909,51 @@ class LiveModelSTT(SpeechToTextEntity):
                                         "success": True,
                                         "conversation_ended": True,
                                     }
+                                elif tool_name == PLAY_SOUND_TOOL_NAME:
+                                    if not sound_responses_enabled:
+                                        tool_result = {
+                                            "error": "Sound responses are disabled"
+                                        }
+                                    elif sound_selected:
+                                        tool_result = {
+                                            "error": "A sound was already selected for this response"
+                                        }
+                                    else:
+                                        pcm, tool_result = await async_sound_response(
+                                            tool_args
+                                        )
+                                        if pcm:
+                                            sound_selected = True
+                                            replacement_response_pending = False
+                                            response_audio_stream.interrupt()
+                                            response_audio_resampler.reset()
+                                            text_response_parts.clear()
+                                            label = f"[Sound: {tool_result['sound']}]"
+                                            text_response_parts.append(label)
+                                            if response_text_stream is not None:
+                                                response_text_stream.add_chunk(label)
+                                            gemini_replied.set()
+                                            first_audio.set()
+                                            audio_response_chunk_count += 1
+                                            audio_response_bytes += len(pcm)
+                                            for offset in range(
+                                                0, len(pcm), OPTIMAL_STREAM_CHUNK_SIZE
+                                            ):
+                                                await response_audio_stream.add_chunk(
+                                                    pcm[
+                                                        offset : offset
+                                                        + OPTIMAL_STREAM_CHUNK_SIZE
+                                                    ]
+                                                )
                                 elif tool_name == HISTORY_TOOL_NAME:
                                     try:
                                         tool_result = await async_handle_history_tool(
                                             self.hass, tool_args
                                         )
                                     except Exception as err:  # noqa: BLE001
-                                        _LOGGER.error("History tool failed: %s", err)
+                                        _LOGGER.error(
+                                            "Tool %s failed: %s", tool_name, err
+                                        )
                                         tool_result = {"error": str(err)}
                                 elif llm_api is not None:
                                     try:
@@ -897,12 +1008,12 @@ class LiveModelSTT(SpeechToTextEntity):
 
                         last_response_activity = time.monotonic()
 
-                        if response.text:
+                        if response.text and not sound_selected:
                             text_response_parts.append(response.text)
                             if response_text_stream is not None:
                                 response_text_stream.add_chunk(response.text)
 
-                        if response.audio:
+                        if response.audio and not sound_selected:
                             if not gemini_replied.is_set():
                                 gemini_replied.set()
                                 if support_barge_in:
@@ -923,7 +1034,11 @@ class LiveModelSTT(SpeechToTextEntity):
                             )
                             first_audio.set()
 
-                        if transcribe_output and response.output_transcript:
+                        if (
+                            transcribe_output
+                            and response.output_transcript
+                            and not sound_selected
+                        ):
                             transcription = response.output_transcript
                             _LOGGER.debug(
                                 "[turn=%s] output transcription chunk len=%d",
@@ -975,6 +1090,7 @@ class LiveModelSTT(SpeechToTextEntity):
                             await response_audio_stream.add_chunk(
                                 response_audio_resampler.flush()
                             )
+                            session_manager.set_turn_complete(conversation_id)
                             if support_barge_in and first_audio.is_set():
                                 # The provider turn is complete, but Home
                                 # Assistant's pipeline run is still open and
@@ -1085,7 +1201,8 @@ class LiveModelSTT(SpeechToTextEntity):
                             await receive_task
                         except asyncio.CancelledError:
                             pass
-                        session_manager.retire_session(conversation_id)
+                        if not session_manager.is_turn_complete(conversation_id):
+                            session_manager.retire_session(conversation_id)
                         break
                     done, _pending = await asyncio.wait(
                         [send_task, receive_task],
@@ -1453,7 +1570,7 @@ class LiveModelSTT(SpeechToTextEntity):
 class GeminiLiveSTT(LiveModelSTT):
     """Stream a Home Assistant voice turn through Gemini Live."""
 
-    integration_name = "Gemini Live"
+    integration_name = "Élise Live Test"
     transcribe_config_key = CONF_TRANSCRIBE_GEMINI
     default_transcribe = DEFAULT_TRANSCRIBE_GEMINI
     supports_search_grounding = True
@@ -1491,4 +1608,3 @@ class GPTRealtimeSTT(LiveModelSTT):
     def _api_error_message(exc: BaseException) -> str | None:
         """Return OpenAI billing errors that the user can resolve."""
         return _user_visible_api_error(exc)
-

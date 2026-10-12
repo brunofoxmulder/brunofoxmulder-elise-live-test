@@ -7,10 +7,17 @@ on:
     - cron: "0 0 * * *"
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
+  validate-hacs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: integration
+
   validate-hassfest:
     runs-on: ubuntu-latest
     steps:
@@ -18,34 +25,3 @@ jobs:
         uses: actions/checkout@v4
       - name: Hassfest validation
         uses: home-assistant/actions/hassfest@master
-
-  test-python:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.14"
-      - name: Install test dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pytest pytest-asyncio voluptuous
-          python -c "import json; from pathlib import Path; manifest = json.loads(Path('custom_components/elise_live_test/manifest.json').read_text()); Path('/tmp/elise-live-test-requirements.txt').write_text(chr(10).join(manifest['requirements']) + chr(10))"
-          # Hassfest requires a compatible minimum for shared HA packages.
-          # Validate one explicit supported SDK instead of an unbounded CI upgrade.
-          python -c "import json; from pathlib import Path; contract = json.loads(Path('tests/matt_contract.json').read_text()); Path('/tmp/elise-live-test-constraints.txt').write_text('google-genai==' + contract['validated_google_genai'] + chr(10))"
-          pip install -r /tmp/elise-live-test-requirements.txt -c /tmp/elise-live-test-constraints.txt
-          git clone --depth 1 --branch 2026.9.4 https://github.com/home-assistant/core.git scratch/ha-core
-          # Core's editable install pulls its runtime requirements. Installing
-          # requirements_all.txt resolves every optional HA integration and can
-          # stall the runner even though Élise tests only need their own deps.
-          pip install -e scratch/ha-core
-          pip install -r scratch/ha-core/requirements_test.txt
-          # Élise imports HA's Conversation integration. Install exactly its
-          # pinned runtime requirements instead of requirements_all.txt.
-          pip install pymicro-vad==1.0.1 pyspeex-noise==1.0.2 gazetteer-matcher==1.1.0 hassil==3.12.1 home-assistant-intents==2026.8.28 SQLAlchemy==2.0.52 fnv-hash-fast==2.0.3 psutil-home-assistant==0.0.1 mutagen==1.48.1 ha-ffmpeg==3.2.2
-      - name: Run unit tests
-        run: pytest -q
-

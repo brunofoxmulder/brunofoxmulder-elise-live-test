@@ -257,7 +257,8 @@ class TurnStore:
         for index, (text_stream, audio_stream) in enumerate(self._streaming_audio):
             transcript = text_stream.text
             if transcript and (
-                transcript.startswith(initial_text) or initial_text.startswith(transcript)
+                transcript.startswith(initial_text)
+                or initial_text.startswith(transcript)
             ):
                 del self._streaming_audio[index]
                 _LOGGER.debug(
@@ -279,6 +280,7 @@ class _LiveConnection:
     context_manager: Any
     session: Any
     config_signature: str
+    turn_complete: bool = False
 
 
 class LiveSessionManager:
@@ -330,12 +332,17 @@ class LiveSessionManager:
                 )
 
             current_task = asyncio.current_task()
+            connection.turn_complete = False
             if current_task is not None:
                 self._active_turn_tasks[conversation_id] = current_task
             try:
                 yield connection.session
             except asyncio.CancelledError:
-                await self._async_close(conversation_id, connection)
+                # Barge-in listeners outlive the model's response. Stopping
+                # that idle listener for the next pipeline must preserve the
+                # session and its conversation history.
+                if not connection.turn_complete:
+                    await self._async_close(conversation_id, connection)
                 raise
             except Exception:
                 await self._async_close(conversation_id, connection)
@@ -365,6 +372,16 @@ class LiveSessionManager:
         """Retire a failed session without ending the HA conversation."""
         self._sessions_to_retire.add(conversation_id)
 
+    def set_turn_complete(self, conversation_id: str, complete: bool = True) -> None:
+        """Track whether the provider is idle and safe to reuse after cancellation."""
+        if connection := self._connections.get(conversation_id):
+            connection.turn_complete = complete
+
+    def is_turn_complete(self, conversation_id: str) -> bool:
+        """Return whether the current provider response has finished."""
+        connection = self._connections.get(conversation_id)
+        return connection is not None and connection.turn_complete
+
     def reset_conversation(self, conversation_id: str) -> None:
         """Reset completed conversation status for a new user input."""
         self._completed_conversations.discard(conversation_id)
@@ -378,7 +395,7 @@ class LiveSessionManager:
         return await self._async_cancel_active_turn(conversation_id) or cancelled
 
     async def _async_cancel_active_turn(self, conversation_id: str) -> bool:
-        """Cancel an unfinished provider turn."""
+        """Stop the previous provider listener before starting another turn."""
         task = self._active_turn_tasks.get(conversation_id)
         if task is None or task.done() or task is asyncio.current_task():
             return False
@@ -526,9 +543,6 @@ def active_pipeline_context(
         candidates: list[tuple[str, str, str | None, Context | None]] = []
         for runs in pipeline_data.pipeline_runs._pipeline_runs.values():
             for run in runs.values():
-                provider = getattr(run, "stt_provider", None)
-                if getattr(provider, "entity_id", None) != stt_entity_id:
-                    continue
                 debug = pipeline_data.pipeline_debug.get(run.pipeline.id, {}).get(
                     run.id
                 )
@@ -542,7 +556,11 @@ def active_pipeline_context(
                     if event.type == PipelineEventType.RUN_START and event.data:
                         conversation_id = event.data.get("conversation_id")
                     elif event.type == PipelineEventType.STT_START:
-                        stt_started = event.timestamp
+                        stt_started = (
+                            event.timestamp
+                            if event.data and event.data.get("engine") == stt_entity_id
+                            else None
+                        )
                         stt_ended = False
                     elif event.type in (
                         PipelineEventType.STT_END,
@@ -580,4 +598,3 @@ def active_pipeline_context(
         conversation_id,
     )
     return conversation_id, None, None
-

@@ -3,8 +3,8 @@
 from types import SimpleNamespace
 from typing import Any
 
-from homeassistant.const import CONF_LLM_HASS_API
 import voluptuous as vol
+from homeassistant.const import CONF_LLM_HASS_API
 from elise_live_test.config_flow import (
     _needs_model_specific_refresh,
     _provider_schema,
@@ -16,6 +16,7 @@ from elise_live_test.const import (
     CONF_MODEL,
     CONF_RESPONSE_TIMEOUT,
     CONF_SEARCH_GROUNDING,
+    CONF_ENABLE_SOUND_RESPONSES,
     CONF_SUPPORT_BARGE_IN,
     CONF_THINKING_LEVEL,
     CONF_VOICE,
@@ -30,16 +31,6 @@ from elise_live_test.const import (
 )
 
 _VALID_VOICE = {PROVIDER_GEMINI: "Puck", PROVIDER_OPENAI: "marin"}
-
-def _schema(provider: str, config: dict[str, Any] | None = None) -> vol.Schema:
-    """Build provider schema with LLM API discovery isolated from these UI tests."""
-    from elise_live_test import config_flow
-    original = config_flow.llm.async_get_apis
-    config_flow.llm.async_get_apis = lambda hass: []
-    try:
-        return _provider_schema(provider, config, hass=SimpleNamespace())
-    finally:
-        config_flow.llm.async_get_apis = original
 
 
 def _validator(schema: vol.Schema, key: str) -> Any:
@@ -56,7 +47,7 @@ def _available_models(schema: vol.Schema) -> list[str]:
 
 
 def test_gemini_models_use_dropdown_and_include_extended_thinking() -> None:
-    schema = _schema(PROVIDER_GEMINI)
+    schema = _provider_schema(PROVIDER_GEMINI)
     model_selector = _validator(schema, CONF_MODEL)
 
     assert model_selector.config["mode"] == "dropdown"
@@ -64,17 +55,13 @@ def test_gemini_models_use_dropdown_and_include_extended_thinking() -> None:
 
 
 def test_search_grounding_is_a_gemini_preference() -> None:
-    gemini_keys = [
-        marker.schema for marker in _schema(PROVIDER_GEMINI).schema
-    ]
-    openai_keys = [
-        marker.schema for marker in _schema(PROVIDER_OPENAI).schema
-    ]
+    gemini_keys = [marker.schema for marker in _provider_schema(PROVIDER_GEMINI).schema]
+    openai_keys = [marker.schema for marker in _provider_schema(PROVIDER_OPENAI).schema]
 
     assert CONF_SEARCH_GROUNDING in gemini_keys
     assert CONF_SEARCH_GROUNDING not in openai_keys
 
-    result = _schema(PROVIDER_GEMINI)(
+    result = _provider_schema(PROVIDER_GEMINI)(
         {
             CONF_API_KEY: "key",
             CONF_MODEL: "gemini-3.8-live",
@@ -86,7 +73,7 @@ def test_search_grounding_is_a_gemini_preference() -> None:
 
 
 def test_response_timeout_defaults_and_exposes_range() -> None:
-    schema = _schema(PROVIDER_GEMINI)
+    schema = _provider_schema(PROVIDER_GEMINI)
     result = schema(
         {
             CONF_API_KEY: "key",
@@ -99,6 +86,27 @@ def test_response_timeout_defaults_and_exposes_range() -> None:
     timeout_selector = _validator(schema, CONF_RESPONSE_TIMEOUT)
     assert timeout_selector.config["min"] == 15
     assert timeout_selector.config["max"] == 120
+
+
+def test_sound_responses_are_opt_in_and_preserved_in_options() -> None:
+    for provider in (PROVIDER_GEMINI, PROVIDER_OPENAI):
+        input_data = {
+            CONF_API_KEY: "key",
+            CONF_MODEL: _available_models(_provider_schema(provider))[0],
+            CONF_VOICE: _VALID_VOICE[provider],
+        }
+        assert (
+            _provider_schema(provider)(input_data)[CONF_ENABLE_SOUND_RESPONSES] is False
+        )
+        assert (
+            _provider_schema(provider, {CONF_ENABLE_SOUND_RESPONSES: True})(input_data)[
+                CONF_ENABLE_SOUND_RESPONSES
+            ]
+            is True
+        )
+    assert CONF_ENABLE_SOUND_RESPONSES not in [
+        marker.schema for marker in _provider_schema(PROVIDER_PERSONAPLEX).schema
+    ]
 
 
 def test_llm_api_selector_lists_registered_apis(monkeypatch) -> None:
@@ -129,7 +137,7 @@ def test_llm_api_selector_lists_registered_apis(monkeypatch) -> None:
     assert marker.description["suggested_value"] == ["assist", "memory"]
 
 
-def test_llm_api_selector_defaults_to_assist_and_retains_missing_apis(
+def test_llm_api_selector_defaults_to_assist_and_ignores_missing_apis(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
@@ -161,8 +169,7 @@ def test_llm_api_selector_defaults_to_assist_and_retains_missing_apis(
     marker = next(
         marker for marker in schema.schema if marker.schema == CONF_LLM_HASS_API
     )
-    assert marker.description["suggested_value"] == ["removed-api"]
-    assert {option["value"] for option in _validator(schema, CONF_LLM_HASS_API).config["options"]} == {"assist", "removed-api"}
+    assert marker.description["suggested_value"] == []
 
 
 def test_llm_api_selector_preserves_explicit_empty_selection(monkeypatch) -> None:
@@ -216,11 +223,11 @@ def test_thinking_level_only_shown_for_extended_thinking() -> None:
         ("gemini-3.8-live", False),
         ("gemini-3.1-flash-live-preview", False),
     ):
-        schema = _schema(PROVIDER_GEMINI, {CONF_MODEL: model})
+        schema = _provider_schema(PROVIDER_GEMINI, {CONF_MODEL: model})
         keys = [marker.schema for marker in schema.schema]
         assert (CONF_THINKING_LEVEL in keys) is expected
 
-    schema = _schema(
+    schema = _provider_schema(
         PROVIDER_GEMINI,
         {CONF_MODEL: "gemini-3.8-live-extended-thinking"},
     )
@@ -266,7 +273,7 @@ def test_schema_shows_barge_in_for_both_providers(monkeypatch) -> None:
         "elise_live_test.config_flow.supports_tts_interruption", lambda: True
     )
     for provider in (PROVIDER_GEMINI, PROVIDER_OPENAI):
-        schema = _schema(provider)
+        schema = _provider_schema(provider)
         keys = [marker.schema for marker in schema.schema]
         assert CONF_SUPPORT_BARGE_IN in keys
 
@@ -280,7 +287,7 @@ def test_barge_in_hidden_when_core_lacks_interruption_support(
     )
 
     for provider in (PROVIDER_GEMINI, PROVIDER_OPENAI):
-        schema = _schema(provider)
+        schema = _provider_schema(provider)
         keys = [marker.schema for marker in schema.schema]
         assert CONF_SUPPORT_BARGE_IN not in keys
 
@@ -316,7 +323,7 @@ def test_barge_in_defaults_to_false(monkeypatch) -> None:
         "elise_live_test.config_flow.supports_tts_interruption", lambda: True
     )
     for provider in (PROVIDER_GEMINI, PROVIDER_OPENAI):
-        schema = _schema(provider)
+        schema = _provider_schema(provider)
 
         result = schema(
             {
@@ -335,7 +342,7 @@ def test_barge_in_setting_persists_through_reconfigure(monkeypatch) -> None:
         "elise_live_test.config_flow.supports_tts_interruption", lambda: True
     )
     for provider in (PROVIDER_GEMINI, PROVIDER_OPENAI):
-        schema = _schema(provider, {CONF_SUPPORT_BARGE_IN: True})
+        schema = _provider_schema(provider, {CONF_SUPPORT_BARGE_IN: True})
 
         result = schema(
             {
@@ -356,20 +363,18 @@ def test_affective_dialog_only_shown_for_supported_models() -> None:
         ({CONF_MODEL: "gemini-3.1-flash-live-preview"}, False),
         ({}, False),
     ):
-        schema = _schema(PROVIDER_GEMINI, config)
+        schema = _provider_schema(PROVIDER_GEMINI, config)
         keys = [marker.schema for marker in schema.schema]
         assert (CONF_AFFECTIVE_DIALOG in keys) is expected
 
-    schema = _schema(
-        PROVIDER_OPENAI, {CONF_MODEL: "gpt-realtime-2.1"}
-    )
+    schema = _provider_schema(PROVIDER_OPENAI, {CONF_MODEL: "gpt-realtime-2.1"})
     keys = [marker.schema for marker in schema.schema]
     assert CONF_AFFECTIVE_DIALOG not in keys
 
 
 def test_affective_dialog_defaults_to_false() -> None:
     model = "gemini-2.5-flash-native-audio-preview-12-2025"
-    schema = _schema(PROVIDER_GEMINI, {CONF_MODEL: model})
+    schema = _provider_schema(PROVIDER_GEMINI, {CONF_MODEL: model})
 
     result = schema(
         {
@@ -385,7 +390,7 @@ def test_affective_dialog_defaults_to_false() -> None:
 
 def test_affective_dialog_setting_persists_through_reconfigure() -> None:
     model = "gemini-2.5-flash-native-audio-preview-12-2025"
-    schema = _schema(
+    schema = _provider_schema(
         PROVIDER_GEMINI,
         {CONF_MODEL: model, CONF_AFFECTIVE_DIALOG: True},
     )
@@ -399,43 +404,3 @@ def test_affective_dialog_setting_persists_through_reconfigure() -> None:
     )
 
     assert result[CONF_AFFECTIVE_DIALOG] is True
-
-
-def test_multi_api_selection_is_present_and_defaults_to_assist() -> None:
-    """A fresh Élise entry must expose HA/MCP APIs and retain Assist by default."""
-    schema = _schema(PROVIDER_GEMINI)
-    keys = [marker.schema for marker in schema.schema]
-
-    assert CONF_LLM_HASS_API in keys
-    validator = _validator(schema, CONF_LLM_HASS_API)
-    default = next(
-        marker.default()
-        for marker in schema.schema
-        if marker.schema == CONF_LLM_HASS_API
-    )
-    assert default == ["assist"]
-
-
-def test_multi_api_selection_preserves_assist_and_mcp() -> None:
-    """Reconfigure must retain the complete Assist + MCP selection."""
-    selected = ["assist", "agent_memory", "searxng"]
-    schema = _schema(PROVIDER_GEMINI, {CONF_LLM_HASS_API: selected})
-    default = next(
-        marker.default()
-        for marker in schema.schema
-        if marker.schema == CONF_LLM_HASS_API
-    )
-
-    assert default == selected
-
-
-def test_explicit_empty_multi_api_selection_stays_empty() -> None:
-    """An intentional empty selection must never silently restore Assist."""
-    schema = _schema(PROVIDER_GEMINI, {CONF_LLM_HASS_API: []})
-    default = next(
-        marker.default()
-        for marker in schema.schema
-        if marker.schema == CONF_LLM_HASS_API
-    )
-
-    assert default == []

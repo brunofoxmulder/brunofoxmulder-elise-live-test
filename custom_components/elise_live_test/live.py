@@ -91,4 +91,3 @@ class LiveClient(Protocol):
     """Factory for configured provider sessions."""
 
     def connect(self, config: LiveConfig) -> Any: ...
-

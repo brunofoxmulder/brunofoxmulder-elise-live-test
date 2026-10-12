@@ -4,6 +4,8 @@ import asyncio
 import contextlib
 from types import SimpleNamespace
 
+import pytest
+
 from elise_live_test.live import LiveConfig
 from elise_live_test.runtime import (
     AudioStream,
@@ -41,14 +43,12 @@ def _pipeline_run(
         ),
         SimpleNamespace(
             type=PipelineEventType.STT_START,
-            data=None,
+            data={"engine": stt_entity_id},
             timestamp=started_at,
         ),
     ]
     if final_event is not None:
-        events.append(
-            SimpleNamespace(type=final_event, data=None, timestamp="9")
-        )
+        events.append(SimpleNamespace(type=final_event, data=None, timestamp="9"))
     return SimpleNamespace(
         id=run_id,
         pipeline=SimpleNamespace(id="pipeline-1"),
@@ -97,6 +97,32 @@ def test_active_pipeline_context_preserves_the_run_context():
     assert pipeline_context is source_context
     assert pipeline_context.user_id == "voice-user"
     assert pipeline_context.parent_id == "parent-context"
+
+
+@pytest.mark.parametrize("provider_attribute", [False, True])
+def test_active_pipeline_context_matches_stt_event_engine(provider_attribute):
+    run = _pipeline_run(
+        "run-1",
+        conversation_id="conversation-1",
+        started_at="1",
+        context=Context(),
+    )
+    if provider_attribute:
+        run.stt_provider = SimpleNamespace(entity_id="stt.other")
+    else:
+        del run.stt_provider
+    other = _pipeline_run(
+        "run-2",
+        conversation_id="conversation-2",
+        started_at="2",
+        context=Context(),
+        stt_entity_id="stt.other",
+    )
+    other.stt_provider = SimpleNamespace(entity_id="stt.live_model")
+
+    assert active_pipeline_context(
+        _hass_with_pipeline_runs(run, other), "stt.live_model"
+    ) == ("conversation-1", "device-1", run.context)
 
 
 def test_active_pipeline_context_selects_the_most_recent_concurrent_run():
@@ -336,3 +362,51 @@ async def test_retired_session_is_replaced_without_ending_conversation():
         assert second is not first
 
     assert len(created_sessions) == 2
+
+
+@pytest.mark.parametrize("end_state", ["idle", "active", "retired", "ended"])
+async def test_cancelled_listener_preserves_only_idle_conversation(end_state):
+    manager = LiveSessionManager()
+    closed = []
+    sessions = []
+
+    class Client:
+        def connect(self, _config):
+            session = SimpleNamespace(is_open=True)
+            sessions.append(session)
+
+            class Connection:
+                async def __aenter__(self):
+                    return session
+
+                async def __aexit__(self, *_exc):
+                    closed.append(session)
+
+            return Connection()
+
+    ready = asyncio.Event()
+    client = Client()
+    config = _make_config()
+
+    async def listener():
+        async with manager.acquire("conversation-1", client, config):
+            manager.set_turn_complete("conversation-1")
+            if end_state == "active":
+                manager.set_turn_complete("conversation-1", False)
+            elif end_state == "retired":
+                manager.retire_session("conversation-1")
+            elif end_state == "ended":
+                manager.complete_conversation("conversation-1")
+            ready.set()
+            await asyncio.Event().wait()
+
+    task = asyncio.create_task(listener())
+    await asyncio.wait_for(ready.wait(), 1)
+    assert await manager.async_prepare_for_new_turn("conversation-1")
+    assert task.cancelled()
+    assert len(closed) == (0 if end_state == "idle" else 1)
+    manager.reset_conversation("conversation-1")
+    async with manager.acquire("conversation-1", client, config) as session:
+        assert (session is sessions[0]) == (end_state == "idle")
+        assert not manager.is_turn_complete("conversation-1")
+    await manager.async_close_all()

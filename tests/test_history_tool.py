@@ -3,40 +3,18 @@
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
-import importlib.util
 from pathlib import Path
-import sys
-from types import ModuleType
+
+from elise_live_test import history_tool as _MODULE
+from elise_live_test.history_tool import (
+    HISTORY_TOOL_NAME,
+    _compute,
+    _statistics_change,
+    _window,
+    add_history_tool,
+)
 
 _PACKAGE_PATH = Path(__file__).parents[1] / "custom_components" / "elise_live_test"
-_PACKAGE_NAME = "custom_components.elise_live_test"
-
-# Build a lightweight package shell so relative imports work without executing
-# elise_live_test/__init__.py (which initializes unrelated STT/TTS dependencies).
-_package = ModuleType(_PACKAGE_NAME)
-_package.__path__ = [str(_PACKAGE_PATH)]
-sys.modules[_PACKAGE_NAME] = _package
-
-_live_spec = importlib.util.spec_from_file_location(
-    f"{_PACKAGE_NAME}.live", _PACKAGE_PATH / "live.py"
-)
-_live_module = importlib.util.module_from_spec(_live_spec)
-sys.modules[_live_spec.name] = _live_module
-assert _live_spec.loader is not None
-_live_spec.loader.exec_module(_live_module)
-
-_SPEC = importlib.util.spec_from_file_location(
-    f"{_PACKAGE_NAME}.history_tool", _PACKAGE_PATH / "history_tool.py"
-)
-_MODULE = importlib.util.module_from_spec(_SPEC)
-sys.modules[_SPEC.name] = _MODULE
-assert _SPEC.loader is not None
-_SPEC.loader.exec_module(_MODULE)
-_compute = _MODULE._compute
-_window = _MODULE._window
-add_history_tool = _MODULE.add_history_tool
-HISTORY_TOOL_NAME = _MODULE.HISTORY_TOOL_NAME
-_statistics_change = _MODULE._statistics_change
 
 
 BASE = datetime(2026, 9, 20, 10, 0, tzinfo=UTC)
