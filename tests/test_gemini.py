@@ -9,6 +9,7 @@ from google.genai import types
 from elise_live_test.gemini import (
     GeminiLiveClient,
     GeminiLiveSession,
+    _gemini_function_response_payload,
     _gemini_config,
     _gemini_schema,
     async_create_gemini_client,
@@ -197,6 +198,19 @@ def test_live_connect_config_accepts_optional_string_enum_from_ha_tool():
         "compare"
     ]
     assert compare.enum == ["eq", "ne"]
+
+
+def test_gemini_function_response_wraps_plain_text():
+    payload = _gemini_function_response_payload("forecast text")
+
+    validated = types.FunctionResponse(name="weather", response=payload)
+    assert validated.response == {"result": "forecast text"}
+
+
+def test_gemini_function_response_preserves_structured_payload():
+    payload = {"forecast": [{"condition": "rainy"}]}
+
+    assert _gemini_function_response_payload(payload) is payload
 
 
 def test_gemini_config_extended_thinking_uses_non_blocking_tools():

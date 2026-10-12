@@ -4,6 +4,16 @@ All notable changes to Gemini Live for Home Assistant are documented here.
 
 ## Unreleased
 
+## 1.0.11-test.3
+
+- Fixed Gemini tool-response validation when a Home Assistant LLM API returns
+  plain text, a list, or another non-object JSON value. Existing object results
+  remain unchanged; other values are wrapped in a stable `result` object.
+- Added a Gemini native-audio language guard derived from the active Home
+  Assistant pipeline language. Ambiguous speech is interpreted in that language,
+  and the model is instructed not to drift into another language when audio is
+  unclear.
+
 ## 1.0.11-test.2
 
 - Fixed Gemini session creation failing when a selected Home Assistant LLM API
