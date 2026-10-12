@@ -1,7 +1,7 @@
 {
   "domain": "elise_live_test",
   "name": "Élise Live Test",
-  "after_dependencies": ["assist_pipeline"],
+  "after_dependencies": ["assist_pipeline", "recorder"],
   "codeowners": ["@brunofoxmulder"],
   "config_flow": true,
   "documentation": "https://github.com/brunofoxmulder/brunofoxmulder-elise-live-test",
