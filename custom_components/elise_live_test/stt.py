@@ -333,6 +333,27 @@ def _add_search_tool_instruction(
     return f"{system_instruction}\n\n{instruction}"
 
 
+def _add_conversation_language_instruction(
+    system_instruction: str, language: str | None
+) -> str:
+    """Keep Gemini in the Home Assistant pipeline language.
+
+    Native-audio Live models select languages automatically and do not accept
+    an explicit language code. Google recommends restricting spoken languages
+    in the system instruction instead. Keep the BCP-47 code from the active
+    pipeline so the rule follows each Home Assistant voice configuration.
+    """
+    language_code = language or "en"
+    instruction = (
+        f"The Home Assistant conversation language is {language_code!r}. "
+        "Interpret ambiguous speech in that language and reply only in that "
+        "language. Do not switch languages merely because unclear audio "
+        "resembles another language. If speech cannot be understood in the "
+        "configured language, ask the user to repeat instead of guessing."
+    )
+    return f"{system_instruction}\n\n{instruction}"
+
+
 def _validate_tool_results(value: Any) -> Any:
     """Convert HA tool responses to provider JSON, including Core 2026.10."""
     # Older Core versions return a dictionary and have no ToolResult class.
@@ -422,6 +443,7 @@ class LiveModelSTT(SpeechToTextEntity):
     default_system_instruction = DEFAULT_SYSTEM_INSTRUCTION
     supported_language_codes = SUPPORTED_LANGUAGES
     supports_search_grounding = False
+    enforce_conversation_language = False
 
     def __init__(self, entry: ConfigEntry) -> None:
         """Initialize the STT entity."""
@@ -594,6 +616,10 @@ class LiveModelSTT(SpeechToTextEntity):
                 [],
                 encourage_web_search,
                 native_search_grounding=True,
+            )
+        if self.enforce_conversation_language:
+            system_instruction = _add_conversation_language_instruction(
+                system_instruction, metadata.language
             )
         system_instruction = _add_end_conversation_instruction(
             system_instruction, enable_sound_responses=sound_responses_enabled
@@ -1574,6 +1600,7 @@ class GeminiLiveSTT(LiveModelSTT):
     transcribe_config_key = CONF_TRANSCRIBE_GEMINI
     default_transcribe = DEFAULT_TRANSCRIBE_GEMINI
     supports_search_grounding = True
+    enforce_conversation_language = True
 
     async def _async_create_client(self, api_key: str) -> GeminiLiveClient:
         """Create the Gemini provider adapter."""
