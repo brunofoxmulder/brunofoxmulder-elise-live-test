@@ -92,6 +92,18 @@ class _GeminiConnect:
         await self._context.__aexit__(*exc)
 
 
+def _gemini_function_response_payload(value: Any) -> dict[str, Any]:
+    """Return the object payload required by Gemini FunctionResponse.
+
+    Home Assistant LLM APIs may legitimately return JSON scalars or arrays.
+    Google's FunctionResponse contract accepts only an object, so preserve
+    existing mappings and place every other JSON value under a stable key.
+    """
+    if isinstance(value, dict):
+        return value
+    return {"result": value}
+
+
 class GeminiLiveSession:
     """Translate Gemini SDK calls and responses to the neutral contract."""
 
@@ -145,7 +157,7 @@ class GeminiLiveSession:
                 types.FunctionResponse(
                     name=response.name,
                     id=response.call_id,
-                    response=response.response,
+                    response=_gemini_function_response_payload(response.response),
                 )
                 for response in responses
             ]
