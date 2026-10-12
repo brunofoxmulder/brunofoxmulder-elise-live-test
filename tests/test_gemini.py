@@ -4,10 +4,13 @@ import asyncio
 import sys
 from types import SimpleNamespace
 
+from google.genai import types
+
 from elise_live_test.gemini import (
     GeminiLiveClient,
     GeminiLiveSession,
     _gemini_config,
+    _gemini_schema,
     async_create_gemini_client,
 )
 from elise_live_test.live import LiveConfig, LiveEvent, LiveTool
@@ -141,6 +144,59 @@ def test_gemini_config_38_live_tools_opt_into_blocking_behaviour():
         "properties": {"json": {"type": "STRING"}},
         "required": [],
     }
+
+
+def test_gemini_schema_removes_null_from_string_enum():
+    schema = {
+        "type": "object",
+        "properties": {
+            "compare": {
+                "type": "string",
+                "enum": ["eq", "ne", None],
+            }
+        },
+    }
+
+    assert _gemini_schema(schema)["properties"]["compare"] == {
+        "type": "STRING",
+        "enum": ["eq", "ne"],
+    }
+
+
+def test_gemini_schema_drops_enum_containing_only_null():
+    assert _gemini_schema({"type": "string", "enum": [None]}) == {
+        "type": "STRING"
+    }
+
+
+def test_live_connect_config_accepts_optional_string_enum_from_ha_tool():
+    config = _gemini_config(
+        _make_config(
+            model="gemini-3.8-live",
+            tools=[
+                LiveTool(
+                    "history_filter",
+                    "Filter history",
+                    {
+                        "type": "object",
+                        "properties": {
+                            "compare": {
+                                "type": "string",
+                                "enum": ["eq", "ne", None],
+                            }
+                        },
+                    },
+                )
+            ],
+        )
+    )
+
+    # This is the same SDK validation performed before a live WebSocket opens.
+    validated = types.LiveConnectConfig(**config)
+    compare = validated.tools[0].function_declarations[0].parameters.properties[
+        "compare"
+    ]
+    assert compare.enum == ["eq", "ne"]
 
 
 def test_gemini_config_extended_thinking_uses_non_blocking_tools():
