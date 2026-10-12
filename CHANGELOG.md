@@ -2,20 +2,76 @@
 
 All notable changes to Gemini Live for Home Assistant are documented here.
 
-## 0.1.0-test.2 — Matt baseline with tools (candidate)
+## Unreleased
 
-- Restore Matt 1.0.9 at d4ad0e5 for audio buffering, sessions, TTS, progressive
-  conversation text and protocol completion.
-- Limit extensions to saved API selection, Recorder GetHistory and the Gemini
-  object envelope for weather/MCP results.
-- Pin upstream transport contracts and test against Home Assistant 2026.9.4.
-- Declare the HA-compatible SDK minimum google-genai>=2.25.0 and msgpack==1.1.2.
-  Matt pins 2.21.0, which Hassfest rejects against HA's 2.25.0 requirement.
-  Keep Matt's voice source unchanged; CI installs the candidate's actual
-  manifest requirements with the validated SDK constraint 2.25.0; a separate
-  contract prevents packaging drift and checks the actual SDK used by tests.
-- Remove the previous Élise-specific partial-text return, early generation
-  completion and action-confirmation rewriting. Field validation remains open.
+## 1.0.11-test.1
+
+- Rebased the test integration directly on Matt's published `v1.0.11`, keeping
+  its live audio, session lifecycle, Home Assistant 2026.10 compatibility,
+  multiple Home Assistant LLM API selection, and sound-response implementation.
+- Preserved the separate `elise_live_test` domain and **Élise Live Test** name so
+  the variant remains distinguishable from the upstream integration.
+- Added the read-only `GetHistory` Recorder tool to both voice and typed Live
+  paths. It resolves only entities exposed to Assist and supports states,
+  changes, counts, durations, values, numeric summaries, and long-term
+  statistics changes.
+
+## 1.0.11
+
+- Added a `play_sound` model tool for nonverbal responses: `ok`, `done`,
+  `complete`, `cancelled`, `bad`, and `good`. Bundled beep cues are generated
+  statically with Python and played through the existing STT/TTS audio handoff
+  instead of model speech, with support for typed conversations as well.
+  Enable the optional **Sound responses** setting to expose the tool; it is
+  disabled by default.
+- Fixed voice turns being processed twice after Core's pipeline refactor by
+  resolving the active STT run from its event engine rather than its removed
+  provider attribute.
+- Fixed buffered TTS audio and fallback silence being rejected by ESPHome
+  during barge-in playback by sending an unknown-length WAV header.
+- Fixed Home Assistant Core 2026.10 tool calls failing with a Gemini
+  `FunctionResponse` validation error. Convert `llm.ToolResult` to JSON before
+  sending it to the provider, preserve failed-call information, and continue
+  supporting dictionary results from older Core versions. Fixes #12.
+- Fixed the Gemini receiver closing after a normal `turnComplete` in barge-in
+  mode. Keep listening across completed provider turns until the pipeline
+  closes or cancels the microphone stream, allowing interruptions during
+  satellite playback and subsequent user utterances.
+- Corrected audio-sender cancellation logs to report whether a response has
+  started, rather than attributing every cancellation to the model replying.
+- Preserved completed live sessions between voice turns so continued
+  conversations retain their context, while discarding unfinished turns.
+- Strengthened Google Search grounding instructions to encourage proactive
+  searches for external facts and current information when web search is enabled.
+
+## 1.0.10
+
+- Require `google-genai>=2.25.0` so the SDK follows Home Assistant updates
+  and resolve the hassfest requirements conflict.
+
+- Added a configurable response inactivity timeout, from 15 to 120 seconds. The
+  existing 30-second behavior remains the default for existing entries.
+- Fixed Gemini responses being interrupted when barge-in was disabled on
+  satellites that continue sending microphone audio as the model starts its
+  response, notably the ESP32 S3 Box 3. The Gemini session now explicitly uses
+  `NO_INTERRUPTION` unless barge-in is enabled. Non-barge-in turns also keep
+  consuming microphone input until Home Assistant's external VAD closes the
+  stream, ensuring remote satellites receive `STT_VAD_END` and the provider
+  receives the matching audio-stream end signal. Playback is not released until
+  external VAD has closed that stream, preventing satellites from stalling when
+  Gemini starts answering before Core finishes its STT stage. VAD negotiation
+  and runtime behavior now use the same effective barge-in capability, including
+  on Core versions without TTS interruption support. Timed-out or unusable live
+  sessions are discarded so delayed responses and tool calls cannot leak into a
+  later continued-conversation turn. Fixes #11.
+- Removed the `Show text` setting and integration-owned `show_text` tool. Screen
+  display behavior belongs in the remote satellite or client rather than the
+  live-model tool API.
+- Added a multi-select for Home Assistant LLM APIs to setup, reconfigure, and
+  options screens. Third-party APIs such as AI Memory's Memory Management can
+  now be enabled alongside Assist, and their tools and prompt are passed to
+  both voice and typed live-model conversations. Assist is selected by default
+  for new entries and existing entries upgraded from 1.0.9.
 
 ## 1.0.9
 
@@ -147,4 +203,3 @@ All notable changes to Gemini Live for Home Assistant are documented here.
   text-to-speech entities.
 - Added HACS metadata, brand assets, translations, validation workflow, and
   installation documentation.
-

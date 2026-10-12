@@ -14,7 +14,7 @@ CANVAS = SIZE * SCALE
 OUTPUT = (
     Path(__file__).resolve().parents[1]
     / "custom_components"
-    / "gemini_live"
+    / "elise_live_test"
     / "brand"
     / "icon.png"
 )

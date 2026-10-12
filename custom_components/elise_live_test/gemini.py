@@ -145,11 +145,7 @@ class GeminiLiveSession:
                 types.FunctionResponse(
                     name=response.name,
                     id=response.call_id,
-                    response=(
-                        response.response
-                        if isinstance(response.response, dict)
-                        else {"result": response.response}
-                    ),
+                    response=response.response,
                 )
                 for response in responses
             ]
@@ -195,13 +191,16 @@ class GeminiLiveSession:
                     interrupted = bool(getattr(content, "interrupted", False))
                     if interrupted:
                         interrupted_turn = True
-                    if content.turn_complete and (
-                        interrupted_turn or interaction_in_progress
-                    ):
-                        # The SDK ends each receive() iterator at turn_complete.
-                        # Re-enter it so the replacement response can arrive.
-                        receive_next_turn = (
-                            self._support_barge_in or self._extended_thinking
+                    if content.turn_complete:
+                        # The SDK ends receive() at each completed server turn.
+                        # In barge-in mode, ordinary completion must not close
+                        # the listener: the satellite can still be playing and
+                        # the same session must accept another user utterance.
+                        # The STT owner closes/cancels this iterator when its
+                        # pipeline microphone stream ends.
+                        receive_next_turn = self._support_barge_in or (
+                            self._extended_thinking
+                            and (interrupted_turn or interaction_in_progress)
                         )
                     terminal_turn = bool(content.turn_complete) and not (
                         self._extended_thinking and interaction_in_progress
@@ -343,16 +342,9 @@ def _gemini_schema(schema: dict[str, Any]) -> dict[str, Any]:
             value = {name: _gemini_schema(item) for name, item in value.items()}
         result[key] = value
 
-    if "enum" in result:
-        # Gemini requires string enum members. OpenAPI may include null.
-        values = result["enum"]
-        if None in values:
-            result["nullable"] = True
-        result["enum"] = [str(item) for item in values if item is not None]
-        if result["enum"]:
-            result["type"] = "STRING"
-        else:
-            result.pop("enum")
+    if result.get("enum") and result.get("type") != "STRING":
+        result["type"] = "STRING"
+        result["enum"] = [str(item) for item in result["enum"]]
     if result.get("type") == "OBJECT" and not result.get("properties"):
         result["properties"] = {"json": {"type": "STRING"}}
         result["required"] = []
@@ -374,4 +366,3 @@ def _escape_decode(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: _escape_decode(item) for key, item in value.items()}
     return value
-

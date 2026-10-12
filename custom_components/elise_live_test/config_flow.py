@@ -9,7 +9,6 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import llm, selector
 
 from .compat import supports_tts_interruption
-from .tools import selected_api_ids
 from .const import (
     AVAILABLE_MODELS,
     AVAILABLE_VOICES_INFO,
@@ -17,6 +16,7 @@ from .const import (
     CONF_API_KEY,
     CONF_DETAILED_LOGGING,
     CONF_ENCOURAGE_WEB_SEARCH,
+    CONF_ENABLE_SOUND_RESPONSES,
     CONF_MODEL,
     CONF_PROVIDER,
     CONF_RESPONSE_TIMEOUT,
@@ -29,6 +29,7 @@ from .const import (
     CONF_VOICE,
     DEFAULT_AFFECTIVE_DIALOG,
     DEFAULT_ENCOURAGE_WEB_SEARCH,
+    DEFAULT_ENABLE_SOUND_RESPONSES,
     DEFAULT_MODEL,
     DEFAULT_RESPONSE_TIMEOUT,
     DEFAULT_SEARCH_GROUNDING,
@@ -201,20 +202,25 @@ def _provider_schema(
             )
         ),
     }
+    if not is_personaplex:
+        fields[
+            vol.Optional(
+                CONF_ENABLE_SOUND_RESPONSES,
+                default=current.get(
+                    CONF_ENABLE_SOUND_RESPONSES, DEFAULT_ENABLE_SOUND_RESPONSES
+                ),
+            )
+        ] = selector.BooleanSelector()
     if hass is not None and not is_personaplex:
         apis = [
             selector.SelectOptionDict(value=api.id, label=api.name)
             for api in llm.async_get_apis(hass)
         ]
-        selected_apis = selected_api_ids(current)
-        # Retain a temporarily unavailable API in the form instead of silently
-        # dropping its selection when its integration has not finished loading.
         known_api_ids = {api["value"] for api in apis}
-        apis.extend(
-            selector.SelectOptionDict(value=api_id, label=f"{api_id} (unavailable)")
-            for api_id in selected_apis
-            if api_id not in known_api_ids
-        )
+        selected_apis = current.get(CONF_LLM_HASS_API, [llm.LLM_API_ASSIST])
+        if isinstance(selected_apis, str):
+            selected_apis = [selected_apis]
+        selected_apis = [api_id for api_id in selected_apis if api_id in known_api_ids]
         fields[
             vol.Optional(
                 CONF_LLM_HASS_API,
@@ -357,7 +363,6 @@ class GeminiLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             user_input = _strip_unsupported_settings(user_input)
             user_input[CONF_PROVIDER] = selected_provider
             user_input.setdefault(CONF_SYSTEM_INSTRUCTION, "")
-            user_input.setdefault(CONF_LLM_HASS_API, [])
             title = {
                 PROVIDER_OPENAI: "GPT Realtime",
                 PROVIDER_PERSONAPLEX: "PersonaPlex",
@@ -388,7 +393,6 @@ class GeminiLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             user_input = _strip_unsupported_settings(user_input)
             user_input[CONF_PROVIDER] = provider
             user_input.setdefault(CONF_SYSTEM_INSTRUCTION, "")
-            user_input.setdefault(CONF_LLM_HASS_API, [])
             return self.async_update_reload_and_abort(
                 entry,
                 data_updates=user_input,
@@ -424,7 +428,6 @@ class GeminiLiveOptionsFlowHandler(config_entries.OptionsFlow):
             user_input = _strip_unsupported_settings(user_input)
             user_input[CONF_PROVIDER] = provider
             user_input.setdefault(CONF_SYSTEM_INSTRUCTION, "")
-            user_input.setdefault(CONF_LLM_HASS_API, [])
             return self.async_create_entry(title="", data=user_input)
         return self.async_show_form(
             step_id="init",

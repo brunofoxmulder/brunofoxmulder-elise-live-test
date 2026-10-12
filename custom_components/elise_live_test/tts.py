@@ -1,10 +1,12 @@
 """Text-to-Speech platform for Gemini Live."""
 
 import asyncio
+import io
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import aclosing, suppress
 from typing import Any
+import wave
 
 from homeassistant.components.tts import (
     ATTR_PREFERRED_FORMAT,
@@ -56,14 +58,14 @@ class GeminiLiveTTS(TextToSpeechEntity):
     stage of the same pipeline run.
 
     The conversation text is always delivered via the
-    `gemini_live_conversation_entry` event fired by conversation.py. If no
+    `elise_live_test_conversation_entry` event fired by conversation.py. If no
     cached audio is available, a short silence lets the pipeline complete
     cleanly.
     """
 
     _attr_should_poll = False
     integration_domain = DOMAIN
-    integration_name = "Gemini Live"
+    integration_name = "Élise Live Test"
     turn_store_key = GEMINI_TURN_STORE_KEY
     supported_language_codes = SUPPORTED_LANGUAGES
 
@@ -195,10 +197,15 @@ class GeminiLiveTTS(TextToSpeechEntity):
                     with suppress(asyncio.CancelledError):
                         await drain_task
                 return
-            if audio:
-                yield audio
+            buffered_audio = audio or self._get_dummy_wav()
+            if self._support_barge_in:
+                with wave.open(io.BytesIO(buffered_audio), "rb") as wav:
+                    header = streaming_wav_header(wav.getframerate())
+                    pcm = wav.readframes(wav.getnframes())
+                yield header
+                yield pcm
                 return
-            yield self._get_dummy_wav()
+            yield buffered_audio
 
         _LOGGER.warning(
             "TTS: async_stream_tts_audio called | message=%r | streaming=%s",

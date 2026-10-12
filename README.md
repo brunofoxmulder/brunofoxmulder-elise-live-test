@@ -1,17 +1,15 @@
-# Matt baseline with tools — candidate
-
-This candidate restores Matt 1.0.9 (`d4ad0e5`) for the voice transport and adds
-Home Assistant tool selection, GetHistory and compatible tool-result envelopes.
-See [MATT_BASELINE.md](MATT_BASELINE.md) for exact differences, validation and
-known upstream risks. It is not yet validated on Home Assistant Voice Preview.
-
-# Élise Live Test for Home Assistant
+# Élise Live Test — Matt v1.0.11 with History
 
 [![HACS validation](https://img.shields.io/github/actions/workflow/status/brunofoxmulder/brunofoxmulder-elise-live-test/validate.yml?branch=main&label=HACS%20validation)](https://github.com/brunofoxmulder/brunofoxmulder-elise-live-test/actions/workflows/validate.yml)
 [![GitHub release](https://img.shields.io/github/v/release/brunofoxmulder/brunofoxmulder-elise-live-test)](https://github.com/brunofoxmulder/brunofoxmulder-elise-live-test/releases)
 [![License](https://img.shields.io/github/license/brunofoxmulder/brunofoxmulder-elise-live-test)](LICENSE)
 
-Élise Live Test is an experimental integration based on Gemini Live v1.0.9. It connects the Home Assistant voice pipeline
+This test variant is based directly on Matt's `v1.0.11`. It keeps Matt's live
+audio, session, Home Assistant 2026.10, sound-response, and multiple-LLM-API
+implementation, while adding the read-only `GetHistory` Recorder tool and a
+separate `elise_live_test` domain so it can be evaluated independently.
+
+This custom Home Assistant integration connects the Home Assistant voice pipeline
 directly to either Google's Gemini Live API or OpenAI's Realtime API.
 
 Doing this has the advantage of reducing the time it takes to reply because the 
@@ -21,8 +19,6 @@ It streams microphone audio to the selected provider, lets the model call Home
 Assistant's exposed Assist tools, and plays the native spoken response back through
 the pipeline. This bypasses separate Speech-To-Text (STT) and Text-to-Speech (TTS)
 cloud calls.
-
-**Test repository:** this repository is intentionally separate from the production Élise Live integration. Do not use it as a production replacement until the test branch is validated on Home Assistant.
 
 **NOTE:** The model transcribes the user's speech, but response transcription is
 optional. Enabling it can delay the start of playback in Home Assistant.
@@ -145,13 +141,13 @@ Add this repository as a custom repository in HACS:
 5. Find **Gemini Live** in HACS and select **Download**.
 6. Restart Home Assistant when HACS asks you to.
 
-[![Open your Home Assistant instance and open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=matt123p&repository=ha-gemini-live&category=integration)
+[![Open your Home Assistant instance and open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=brunofoxmulder&repository=brunofoxmulder-elise-live-test&category=integration)
 
 ### Manual
 
 1. Download the latest release from GitHub.
-2. Copy `custom_components/gemini_live` into your Home Assistant configuration
-   directory at `custom_components/gemini_live`.
+2. Copy `custom_components/elise_live_test` into your Home Assistant configuration
+   directory at `custom_components/elise_live_test`.
 3. Restart Home Assistant.
 
 The final path must contain:
@@ -159,7 +155,7 @@ The final path must contain:
 ```text
 <config>/
 └── custom_components/
-    └── gemini_live/
+    └── elise_live_test/
         ├── __init__.py
         ├── manifest.json
         ├── stt.py
@@ -196,14 +192,16 @@ upgrade to the latest version.
 | API key | API key for the selected provider, used for every live connection. |
 | Live model | Provider-specific Realtime model used for voice and typed conversations. |
 | Voice | Provider-specific built-in voice used for native audio responses. |
-| System instruction | Optional personality and behavior instruction. Home Assistant's Assist API prompt is appended automatically. |
+| System instruction | Optional personality and behavior instruction. Instructions from the selected Home Assistant LLM APIs are appended automatically. |
+| LLM APIs | Home Assistant APIs whose tools the model may call. Keep **Assist** selected for smart-home control; integrations such as AI Memory add their own choices, such as **Memory Management**. Multiple APIs can be enabled together. |
 | Detailed logging | Enables verbose logs from this custom integration. These logs can contain transcripts, model details, and tool-call information. |
+| Sound responses | Enables the optional `play_sound` tool for short beep responses instead of speech. Disabled by default. |
 | Transcribe Gemini / GPT | Streams the model's spoken-response transcript into Home Assistant while native audio is still arriving. Disabled by default for the lowest playback latency. |
 | Google Search grounding | Gemini only. Gives the Live model access to Google's built-in Search tool for current or verifiable web information. Optional and disabled by default. Search use may add Gemini API charges. |
 | Thinking level | Gemini 3.8 Live Extended Thinking only. Choose low, medium, or high background reasoning. Higher levels may improve complex answers while increasing latency and cost. |
 | Encourage web search | OpenAI only. Encourages the model to use an exposed search-like Assist tool. This is a prompt hint, not Gemini Search grounding. Disabled by default. |
-| Show text | Exposes a callback function so the model can display formatted text/markdown in the Home Assistant chat UI instead of the default placeholder. Only active when response transcription is disabled. Enabled by default. |
 | Support barge-in | Experimental: keeps microphone audio streaming while the live model is speaking so the user can interrupt a response. Requires the Home Assistant Core interrupt path and a compatible full-duplex voice client or satellite. Disabled by default. |
+| Response inactivity timeout | Closes and discards a live provider session after 15–120 seconds without response activity. Defaults to 30 seconds. This does not change Home Assistant's external-VAD listening timeout. |
 
 For most assistants, choose **Gemini 3.8 Live**: it is optimized for immediate,
 low-latency conversation and direct smart-home commands. Choose **Gemini 3.8
@@ -254,8 +252,9 @@ directly.
 
 ## Give The Model Access To Home Assistant
 
-The selected model can only control or inspect what Home Assistant exposes through Assist.
-Keep the exposed set as small as practical.
+Keep **Assist** selected under **LLM APIs** to let the model control or inspect
+what Home Assistant exposes through Assist. Keep the exposed set as small as
+practical.
 
 1. Open **Settings > Voice assistants**.
 2. Open the **Expose** tab.
@@ -270,9 +269,37 @@ Examples:
 - "Run the good night script."
 - "Set the office thermostat to 20 degrees."
 
-Tool execution is performed by Home Assistant through its Assist LLM API. The
-integration sends tool definitions and tool results to Gemini so it can decide
-what to call and describe the outcome.
+Tool execution is performed by Home Assistant through the selected LLM APIs.
+The integration sends their tool definitions and results to the live provider
+so it can decide what to call and describe the outcome. Third-party integrations
+that register an LLM API, including AI Memory, appear in the same selector and
+can be enabled alongside Assist.
+
+## Nonverbal response sounds
+
+The model can call `play_sound` instead of speaking when a short cue is enough,
+or when you ask it to "just beep" after an action. The available cues are:
+
+| Sound | Meaning | Pattern |
+| --- | --- | --- |
+| `ok` | Acknowledgement | One short high beep |
+| `done` | Action succeeded | Two ascending beeps |
+| `complete` | Task finished | Three ascending notes |
+| `cancelled` | Cancellation | Two descending beeps |
+| `bad` | Failure or negative result | Two low beeps |
+| `good` | Positive result | Two bright ascending notes |
+
+Enable **Sound responses** in the integration's setup or options to expose the
+tool alongside the selected Home Assistant tools. It is disabled by default.
+The model is instructed to perform actions first and choose a cue matching the
+result. A sound response uses the existing STT-to-TTS audio handoff, suppresses
+subsequent model speech for that response, and keeps the conversation open unless
+the model also calls `end_conversation`. Typed conversations support the same
+tool and show a label such as `[Sound: done]`; audio plays through TTS when used.
+
+The six WAV files are bundled with the integration. To regenerate them after
+changing the note patterns, run `python scripts/generate_sounds.py`. Runtime
+playback does not require synthesis or an external audio service.
 
 ## Enable Google Search
 
@@ -304,12 +331,6 @@ For the lowest latency and to avoid search charges, leave the option disabled
 when the assistant only needs Home Assistant state and control. Enable it when
 you want current events, changing facts, or web verification.
 
-### Use the "Show text" Option for Screen Displays
-
-When **Transcribe Gemini** is turned off (which is recommended for the fastest voice responses), Gemini's spoken reply is normally hidden in the Home Assistant chat UI and only the placeholder `-- gemini live --` is displayed.
-
-If you are using a device with a screen (like a wall tablet, phone, or browser), you can enable the **Show text** option. When enabled, if Gemini decides to give you a detailed list, instructions, links, or code blocks that are better read than listened to, it will display them in the chat UI as formatted text while still speaking to you. If it only has a simple spoken reply, it will continue to show the default placeholder.
-
 ## Privacy And Security
 
 - This is a cloud integration. Audio and text leave your Home Assistant
@@ -329,7 +350,7 @@ If you are using a device with a screen (like a wall tablet, phone, or browser),
 ### Gemini Live Does Not Appear
 
 Confirm that the directory is exactly
-`<config>/custom_components/gemini_live`, restart Home Assistant, and clear the
+`<config>/custom_components/elise_live_test`, restart Home Assistant, and clear the
 browser cache. Check **Settings > System > Logs** for manifest or dependency
 installation errors.
 
@@ -361,7 +382,7 @@ then inspect **Settings > System > Logs**. Disable the option afterward.
 1. Open **Settings > Devices & services**.
 2. Open **Gemini Live** and delete its config entry.
 3. Remove the integration in HACS, or manually delete
-   `custom_components/gemini_live`.
+   `custom_components/elise_live_test`.
 4. Restart Home Assistant.
 
 ## Development
@@ -377,4 +398,3 @@ The generator uses only the Python standard library.
 ## License
 
 Gemini Live for Home Assistant is available under the [MIT License](LICENSE).
-

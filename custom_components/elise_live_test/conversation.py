@@ -21,12 +21,12 @@ from .history_tool import (
     add_history_tool,
     async_handle_history_tool,
 )
-from .tools import selected_api_ids
 from .live import LiveConfig, LiveTool, LiveToolResponse
 from .const import (
     CONF_API_KEY,
     CONF_AFFECTIVE_DIALOG,
     CONF_ENCOURAGE_WEB_SEARCH,
+    CONF_ENABLE_SOUND_RESPONSES,
     CONF_MODEL,
     CONF_PROVIDER,
     CONF_SEARCH_GROUNDING,
@@ -39,6 +39,7 @@ from .const import (
     DEFAULT_SYSTEM_INSTRUCTION,
     DEFAULT_THINKING_LEVEL,
     DEFAULT_ENCOURAGE_WEB_SEARCH,
+    DEFAULT_ENABLE_SOUND_RESPONSES,
     DEFAULT_TRANSCRIBE_GEMINI,
     DEFAULT_TRANSCRIBE_GPT,
     DEFAULT_SEARCH_GROUNDING,
@@ -62,6 +63,7 @@ from .stt import (
 )
 from .openai import OpenAIRealtimeClient
 from .runtime import AudioStream, new_conversation_id
+from .sounds import PLAY_SOUND_TOOL_NAME, async_sound_response
 from .utils import pcm_to_wav, resample_24k_to_16k
 
 _LOGGER = logging.getLogger(__name__)
@@ -152,7 +154,7 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
             },
         )
         _LOGGER.debug(
-            "Fired gemini_live_conversation_entry: user=%r assistant=%r",
+            "Fired elise_live_test_conversation_entry: user=%r assistant=%r",
             (user_transcript or "")[:80],
             (assistant_text or "")[:80],
         )
@@ -164,6 +166,9 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
         """Load HA Assist tools and the final live-model instruction."""
         config = {**self.entry.data, **self.entry.options}
         custom_instruction = config.get(CONF_SYSTEM_INSTRUCTION, "")
+        sound_responses_enabled = bool(
+            config.get(CONF_ENABLE_SOUND_RESPONSES, DEFAULT_ENABLE_SOUND_RESPONSES)
+        )
         if self.supports_search_grounding:
             encourage_web_search = bool(
                 config.get(
@@ -180,16 +185,21 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
             )
         system_instruction = custom_instruction or self.default_system_instruction
 
-        api_ids = selected_api_ids(config)
+        api_ids = config.get(CONF_LLM_HASS_API, [llm.LLM_API_ASSIST])
         if not api_ids:
-            live_tools = add_history_tool(_add_end_conversation_tool([]))
+            live_tools = _add_end_conversation_tool(
+                [], enable_sound_responses=sound_responses_enabled
+            )
+            live_tools = add_history_tool(live_tools)
             system_instruction = _add_search_tool_instruction(
                 system_instruction,
                 [],
                 encourage_web_search,
                 native_search_grounding=self.supports_search_grounding,
             )
-            system_instruction = _add_end_conversation_instruction(system_instruction)
+            system_instruction = _add_end_conversation_instruction(
+                system_instruction, enable_sound_responses=sound_responses_enabled
+            )
             return None, live_tools, system_instruction
 
         try:
@@ -211,17 +221,20 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                 encourage_web_search,
                 native_search_grounding=self.supports_search_grounding,
             )
-            system_instruction = _add_end_conversation_instruction(system_instruction)
+            system_instruction = _add_end_conversation_instruction(
+                system_instruction, enable_sound_responses=sound_responses_enabled
+            )
 
             live_tools = _add_end_conversation_tool(
                 _format_tools_for_live(
                     llm_api.tools,
                     llm_api.custom_serializer,
                     encourage_web_search and not self.supports_search_grounding,
-                )
+                ),
+                enable_sound_responses=sound_responses_enabled,
             )
-
             live_tools = add_history_tool(live_tools)
+
             _LOGGER.debug(
                 "Conversation text path loaded %d Home Assistant LLM tools",
                 len(live_tools),
@@ -233,15 +246,19 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                 "path: %s. Tools will be unavailable.",
                 exc,
             )
-            live_tools = add_history_tool(_add_end_conversation_tool([]))
+            live_tools = _add_end_conversation_tool(
+                [], enable_sound_responses=sound_responses_enabled
+            )
+            live_tools = add_history_tool(live_tools)
             system_instruction = _add_search_tool_instruction(
                 system_instruction,
                 [],
                 encourage_web_search,
                 native_search_grounding=self.supports_search_grounding,
             )
-            system_instruction = _add_end_conversation_instruction(system_instruction)
-            live_tools = add_history_tool(live_tools)
+            system_instruction = _add_end_conversation_instruction(
+                system_instruction, enable_sound_responses=sound_responses_enabled
+            )
             return (
                 None,
                 live_tools,
@@ -262,8 +279,6 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
         api_key = config.get(CONF_API_KEY)
         model = config.get(CONF_MODEL)
         voice = config.get(CONF_VOICE)
-        language = user_input.language or "en"
-
         if not api_key:
             _LOGGER.error("API key not configured for %s", self.integration_name)
             return None
@@ -301,6 +316,10 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
         audio_response_chunks: list[bytes] = []
         resampled_pcm_chunks: list[bytes] = []
         wav_data = b""
+        sound_selected = False
+        sound_responses_enabled = bool(
+            config.get(CONF_ENABLE_SOUND_RESPONSES, DEFAULT_ENABLE_SOUND_RESPONSES)
+        )
         native_audio_model = "native-audio" in (model or "")
 
         _LOGGER.warning(
@@ -347,13 +366,35 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                                         "success": True,
                                         "conversation_ended": True,
                                     }
+                                elif tool_name == PLAY_SOUND_TOOL_NAME:
+                                    if not sound_responses_enabled:
+                                        tool_result = {
+                                            "error": "Sound responses are disabled"
+                                        }
+                                    elif sound_selected:
+                                        tool_result = {
+                                            "error": "A sound was already selected for this response"
+                                        }
+                                    else:
+                                        pcm, tool_result = await async_sound_response(
+                                            tool_args
+                                        )
+                                        if pcm:
+                                            sound_selected = True
+                                            text_response_parts.clear()
+                                            text_response_parts.append(
+                                                f"[Sound: {tool_result['sound']}]"
+                                            )
+                                            wav_data = pcm_to_wav(pcm, 16000)
                                 elif tool_name == HISTORY_TOOL_NAME:
                                     try:
                                         tool_result = await async_handle_history_tool(
                                             self.hass, tool_args
                                         )
                                     except Exception as err:  # noqa: BLE001
-                                        _LOGGER.error("History tool failed: %s", err)
+                                        _LOGGER.error(
+                                            "Tool %s failed: %s", tool_name, err
+                                        )
                                         tool_result = {"error": str(err)}
                                 elif llm_api is not None:
                                     try:
@@ -387,9 +428,9 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                             if function_responses:
                                 await session.send_tool_responses(function_responses)
 
-                        if response.text:
+                        if response.text and not sound_selected:
                             text_response_parts.append(response.text)
-                        if response.audio:
+                        if response.audio and not sound_selected:
                             audio_response_chunks.append(response.audio)
                             resampled_pcm_chunks.append(
                                 resample_24k_to_16k(response.audio)
@@ -398,11 +439,15 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                                 b"".join(resampled_pcm_chunks),
                                 16000,
                             )
-                        if response.output_transcript:
+                        if response.output_transcript and not sound_selected:
                             text_response_parts.append(response.output_transcript)
 
                         if response.turn_complete:
-                            if native_audio_model and not audio_response_chunks:
+                            if (
+                                native_audio_model
+                                and not audio_response_chunks
+                                and not sound_selected
+                            ):
                                 _LOGGER.warning(
                                     "[turn=%s] text path turnComplete before audio; waiting",
                                     turn_id,
@@ -561,11 +606,11 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
 class GeminiLiveConversationAgent(LiveModelConversationAgent):
     """Handle pipeline handoffs through a Gemini Live session."""
 
-    integration_name = "Gemini Live"
-    conversation_event = "gemini_live_conversation_entry"
+    integration_name = "Élise Live Test"
+    conversation_event = "elise_live_test_conversation_entry"
     transcribe_config_key = CONF_TRANSCRIBE_GEMINI
     default_transcribe = DEFAULT_TRANSCRIBE_GEMINI
-    error_response = "Sorry, I could not get a response from Gemini Live."
+    error_response = "Sorry, I could not get a response from Élise Live Test."
     supports_search_grounding = True
 
     async def _async_create_client(self, api_key: str) -> GeminiLiveClient:
@@ -593,4 +638,3 @@ class GPTRealtimeConversationAgent(LiveModelConversationAgent):
     async def _async_create_client(self, api_key: str) -> OpenAIRealtimeClient:
         """Create an OpenAI Realtime WebSocket client."""
         return OpenAIRealtimeClient(async_get_clientsession(self.hass), api_key)
-
