@@ -4,6 +4,13 @@ All notable changes to Gemini Live for Home Assistant are documented here.
 
 ## Unreleased
 
+## 1.0.11-test.2
+
+- Fixed Gemini session creation failing when a selected Home Assistant LLM API
+  exposes an optional string schema whose `enum` contains JSON `null`. The
+  Gemini adapter now removes only null enum values and normalizes the remaining
+  values to strings before the Google SDK validates `LiveConnectConfig`.
+
 ## 1.0.11-test.1
 
 - Rebased the test integration directly on Matt's published `v1.0.11`, keeping
